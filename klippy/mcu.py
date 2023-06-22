@@ -546,6 +546,103 @@ class MCU_adc:
         if self._callback is not None:
             self._callback(last_read_time, last_value)
 
+class MCU_analog_endstop:
+    RETRY_QUERY = 1.000
+    def __init__(self, mcu, pin_params):
+        self._mcu = mcu
+        self._pin = pin_params['pin']
+        self._oid = self._mcu.create_oid()
+        self._home_cmd = self._query_cmd = None
+        self._mcu.register_config_callback(self._build_config)
+        self._trigger_completion = None
+        self._rest_ticks = 0
+        ffi_main, ffi_lib = chelper.get_ffi()
+        self._trdispatch = ffi_main.gc(ffi_lib.trdispatch_alloc(), ffi_lib.free)
+        self._trsyncs = [MCU_trsync(mcu, self._trdispatch)]
+    def get_mcu(self):
+        return self._mcu
+    def add_stepper(self, stepper):
+        trsyncs = {trsync.get_mcu(): trsync for trsync in self._trsyncs}
+        trsync = trsyncs.get(stepper.get_mcu())
+        if trsync is None:
+            trsync = MCU_trsync(stepper.get_mcu(), self._trdispatch)
+            self._trsyncs.append(trsync)
+        trsync.add_stepper(stepper)
+        # Check for unsupported multi-mcu shared stepper rails
+        sname = stepper.get_name()
+        if sname.startswith('stepper_'):
+            for ot in self._trsyncs:
+                for s in ot.get_steppers():
+                    if ot is not trsync and s.get_name().startswith(sname[:9]):
+                        cerror = self._mcu.get_printer().config_error
+                        raise cerror("Multi-mcu homing not supported on"
+                                     " multi-mcu shared axis")
+    def get_steppers(self):
+        return [s for trsync in self._trsyncs for s in trsync.get_steppers()]
+    def _build_config(self):
+        # Setup config
+        self._mcu.add_config_cmd("config_analog_endstop oid=%d pin=%s" % (self._oid, self._pin))
+        self._mcu.add_config_cmd(
+            "analog_endstop_home oid=%c clock=0 sample_ticks=0 oversample_count=0"
+            " rest_ticks=0 treshold=0 trsync_oid=0 trigger_reason=0"
+            % (self._oid,), on_restart=True)
+        # Lookup commands
+        cmd_queue = self._trsyncs[0].get_command_queue()
+        self._home_cmd = self._mcu.lookup_command(
+            "analog_endstop_home oid=%c clock=%u sample_ticks=%u oversample_count=%c"
+            " rest_ticks=%u treshold=%u trsync_oid=%c trigger_reason=%c",
+            cq=cmd_queue)
+        # self._home_cmd = self._mcu.lookup_command(
+        #    "endstop_home oid=%c clock=%u sample_ticks=%u sample_count=%c"
+        #    " rest_ticks=%u pin_value=%c trsync_oid=%c trigger_reason=%c",
+        #    cq=cmd_queue)
+        self._query_cmd = self._mcu.lookup_query_command(
+            "analog_endstop_query_state oid=%c",
+            "analog_endstop_state oid=%c next_clock=%u pin_value=%u treshold=%u",
+            oid=self._oid, cq=cmd_queue)
+    def home_start(self, print_time, sample_time, oversample_count, rest_time, treshold):
+        clock = self._mcu.print_time_to_clock(print_time)
+        rest_ticks = self._mcu.print_time_to_clock(print_time+rest_time) - clock
+        self._rest_ticks = rest_ticks
+        reactor = self._mcu.get_printer().get_reactor()
+        self._trigger_completion = reactor.completion()
+        expire_timeout = TRSYNC_TIMEOUT
+        if len(self._trsyncs) == 1:
+            expire_timeout = TRSYNC_SINGLE_MCU_TIMEOUT
+        for trsync in self._trsyncs:
+            trsync.start(print_time, self._trigger_completion, expire_timeout)
+        etrsync = self._trsyncs[0]
+        ffi_main, ffi_lib = chelper.get_ffi()
+        ffi_lib.trdispatch_start(self._trdispatch, etrsync.REASON_HOST_REQUEST)
+        self._home_cmd.send(
+            [self._oid, clock, self._mcu.seconds_to_clock(sample_time),
+             oversample_count, rest_ticks, treshold,
+             etrsync.get_oid(), etrsync.REASON_ENDSTOP_HIT], reqclock=clock)
+        return self._trigger_completion
+    def home_wait(self, home_end_time):
+        etrsync = self._trsyncs[0]
+        etrsync.set_home_end_time(home_end_time)
+        if self._mcu.is_fileoutput():
+            self._trigger_completion.complete(True)
+        self._trigger_completion.wait()
+        self._home_cmd.send([self._oid, 0, 0, 0, 0, 0, 0, 0])
+        ffi_main, ffi_lib = chelper.get_ffi()
+        ffi_lib.trdispatch_stop(self._trdispatch)
+        res = [trsync.stop() for trsync in self._trsyncs]
+        if any([r == etrsync.REASON_COMMS_TIMEOUT for r in res]):
+            return -1.
+        if res[0] != etrsync.REASON_ENDSTOP_HIT:
+            return 0.
+        if self._mcu.is_fileoutput():
+            return home_end_time
+        params = self._query_cmd.send([self._oid])
+        next_clock = self._mcu.clock32_to_clock64(params['next_clock'])
+        return self._mcu.clock_to_print_time(next_clock - self._rest_ticks)
+
+    def query_endstop(self, print_time=None):
+        params = self._query_cmd.send([self._oid])
+        return params['pin_value']
+
 
 ######################################################################
 # Main MCU class
@@ -831,8 +928,8 @@ class MCU:
         self.register_response(self._handle_mcu_stats, 'stats')
     # Config creation helpers
     def setup_pin(self, pin_type, pin_params):
-        pcs = {'endstop': MCU_endstop,
-               'digital_out': MCU_digital_out, 'pwm': MCU_pwm, 'adc': MCU_adc}
+        pcs = {'endstop': MCU_endstop, 'digital_out': MCU_digital_out, 'pwm': MCU_pwm,
+               'adc': MCU_adc, 'analog_endstop': MCU_analog_endstop}
         if pin_type not in pcs:
             raise pins.error("pin type %s not supported on mcu" % (pin_type,))
         return pcs[pin_type](self, pin_params)
