@@ -65,6 +65,13 @@ class PrinterServo:
         else:
             angle = gcmd.get_float('ANGLE')
             self._set_pwm(print_time, self._get_pwm_from_angle(angle))
+    def set_width(self, width):
+        print_time = self.printer.lookup_object('toolhead').get_last_move_time()
+        self._set_pwm(print_time, self._get_pwm_from_pulse_width(width))
+
+    def power_off(self):
+        print_time = self.printer.lookup_object('toolhead').get_last_move_time()
+        self._set_pwm(print_time, 0)
 
 def load_config_prefix(config):
     return PrinterServo(config)
