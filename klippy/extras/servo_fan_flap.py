@@ -18,7 +18,8 @@ class TUNING_PHASE(Enum):
 
 class ServoFanFlap:
     cmd_FLAP_DEBUG_help = "Returns debug informations."
-    cmd_FLAP_SET_help = "Sets the flap position. Usage: FLAP_SET flap_name VALUE=<0. - 1. | 0 - 255>"
+    cmd_FLAP_SET_help = "Sets the flap position. Usage: FLAP_SET flap_name " \
+                        "VALUE=<0. - 1. | 0 - 255>"
     def __init__(self, config):
         self.printer = config.get_printer()
         self.servo = servo.PrinterServo(config)
@@ -31,12 +32,14 @@ class ServoFanFlap:
         self.open_at_sp = config.getboolean("open_at_sp", False)
         self.min_pulse_width = config.getfloat("min_pulse_width", 0.001)
         self.max_pulse_width = config.getfloat("max_pulse_width", 0.002)
-        self.start_value = config.getfloat("start_value", 0, minval=0, maxval=1)
+        self.start_value = config.getfloat(
+            "start_value", 0, minval=0, maxval=1)
         self.last_value = -1
         self.power_off_time = config.getfloat("power_off_time", 0)
         self.power_off_timeout = 0
 
-        self.actual_tuning_width = self.min_pulse_width + (self.max_pulse_width - self.min_pulse_width) * 0.5
+        self.actual_tuning_width = self.min_pulse_width + (
+                self.max_pulse_width - self.min_pulse_width) * 0.5
         self.tuning_timeout = 0
         self.tuning_step = config.getfloat("tuning_step", 0.000005)
         self.tuning_treshold = config.getfloat("tuning_treshold", 0)
@@ -53,15 +56,19 @@ class ServoFanFlap:
         feedback_pin_name = config.get("feedback_pin")
         self.feedback_pin = ppins.setup_pin('adc', feedback_pin_name)
         self.feedback_pin.get_last_value()
-        self.feedback_pin.setup_adc_callback(REPORT_TIME, self._analog_feedback_callback)
-        self.feedback_pin.setup_minmax(SAMPLE_TIME, SAMPLE_COUNT, minval=0., maxval=1., range_check_count=RANGE_CHECK_COUNT)
+        self.feedback_pin.setup_adc_callback(REPORT_TIME,
+                                             self._analog_feedback_callback)
+        self.feedback_pin.setup_minmax(SAMPLE_TIME, SAMPLE_COUNT, minval=0.,
+                                       maxval=1.,
+                                       range_check_count=RANGE_CHECK_COUNT)
         query_adc = config.get_printer().load_object(config, 'query_adc')
-        query_adc.register_adc(self.flap_name + ":feedback", self.feedback_pin)
+        query_adc.register_adc(self.flap_name + ":feedback",
+                               self.feedback_pin)
         self.mcu = self.feedback_pin.get_mcu()
 
         # register commands
         gcode = self.printer.lookup_object("gcode")
-        gcode.register_mux_command("FLAP_GET_CURRENT", "FLAP",
+        gcode.register_mux_command("FLAP_DEBUG", "FLAP",
                                    self.flap_name,
                                    self.cmd_FLAP_DEBUG,
                                    desc=self.cmd_FLAP_DEBUG_help)
@@ -74,7 +81,9 @@ class ServoFanFlap:
             gcode.register_command("M107", self.cmd_M107)
 
     def cmd_FLAP_DEBUG(self, gcmd):
-        gcmd.respond_info(f"Last ADC reading: {self.last_adc}, min pulse width: {self.min_pulse_width}, max pulse width: {self.max_pulse_width}")
+        gcmd.respond_info(f"Last ADC reading: {self.last_adc}, min pulse "
+                          f"width: {self.min_pulse_width}, max pulse width: "
+                          f"{self.max_pulse_width}")
     def cmd_FLAP_SET(self, gcmd):
         val = gcmd.get_float('VALUE', minval=0., maxval= 255.)
         if val > 1:
@@ -93,7 +102,8 @@ class ServoFanFlap:
         self.last_value = value
         if self.open_at_sp:
             value = 1 - value
-        w = self.min_pulse_width + (self.max_pulse_width - self.min_pulse_width) * value
+        w = self.min_pulse_width + (self.max_pulse_width -
+                                    self.min_pulse_width) * value
         eventtime = self.reactor.monotonic()
         self.power_off_timeout = eventtime + self.power_off_time
         self.servo.set_width(w)
@@ -129,14 +139,16 @@ class ServoFanFlap:
                 return
             if last_value > self.tuning_treshold:
                 max_w = self.actual_tuning_width
-                self.actual_tuning_width = self.min_pulse_width + (self.max_pulse_width - self.min_pulse_width) * 0.5
+                self.actual_tuning_width = self.min_pulse_width + (
+                        self.max_pulse_width - self.min_pulse_width) * 0.5
                 self.max_pulse_width = max_w
                 self.tuning_state = TUNING_PHASE.PHASE_2
                 self.tuning_timeout = print_time + self.tuning_start_time
             else:
                 self.actual_tuning_width += self.tuning_step
                 if self.actual_tuning_width > self.max_pulse_width:
-                    self.actual_tuning_width = self.min_pulse_width + (self.max_pulse_width - self.min_pulse_width) * 0.5
+                    self.actual_tuning_width = self.min_pulse_width + (
+                            self.max_pulse_width - self.min_pulse_width) * 0.5
                     self.tuning_timeout = print_time + self.tuning_start_time
                     self.tuning_state = TUNING_PHASE.PHASE_2
                 else:

@@ -557,7 +557,8 @@ class MCU_analog_endstop:
         self._trigger_completion = None
         self._rest_ticks = 0
         ffi_main, ffi_lib = chelper.get_ffi()
-        self._trdispatch = ffi_main.gc(ffi_lib.trdispatch_alloc(), ffi_lib.free)
+        self._trdispatch = ffi_main.gc(ffi_lib.trdispatch_alloc(),
+                                       ffi_lib.free)
         self._trsyncs = [MCU_trsync(mcu, self._trdispatch)]
     def get_mcu(self):
         return self._mcu
@@ -581,16 +582,19 @@ class MCU_analog_endstop:
         return [s for trsync in self._trsyncs for s in trsync.get_steppers()]
     def _build_config(self):
         # Setup config
-        self._mcu.add_config_cmd("config_analog_endstop oid=%d pin=%s" % (self._oid, self._pin))
+        self._mcu.add_config_cmd("config_analog_endstop oid=%d pin=%s" %
+                                 (self._oid, self._pin))
         self._mcu.add_config_cmd(
-            "analog_endstop_home oid=%c clock=0 sample_ticks=0 oversample_count=0"
-            " rest_ticks=0 treshold=0 trsync_oid=0 trigger_reason=0"
+            "analog_endstop_home oid=%c clock=0 sample_ticks=0 "
+            "oversample_count=0 rest_ticks=0 treshold=0 trsync_oid=0 "
+            "trigger_reason=0"
             % (self._oid,), on_restart=True)
         # Lookup commands
         cmd_queue = self._trsyncs[0].get_command_queue()
         self._home_cmd = self._mcu.lookup_command(
-            "analog_endstop_home oid=%c clock=%u sample_ticks=%u oversample_count=%c"
-            " rest_ticks=%u treshold=%u trsync_oid=%c trigger_reason=%c",
+            "analog_endstop_home oid=%c clock=%u sample_ticks=%u "
+            "oversample_count=%c rest_ticks=%u treshold=%u trsync_oid=%c "
+            "trigger_reason=%c",
             cq=cmd_queue)
         # self._home_cmd = self._mcu.lookup_command(
         #    "endstop_home oid=%c clock=%u sample_ticks=%u sample_count=%c"
@@ -598,11 +602,14 @@ class MCU_analog_endstop:
         #    cq=cmd_queue)
         self._query_cmd = self._mcu.lookup_query_command(
             "analog_endstop_query_state oid=%c",
-            "analog_endstop_state oid=%c next_clock=%u pin_value=%u treshold=%u",
+            "analog_endstop_state oid=%c next_clock=%u pin_value=%u "
+            "treshold=%u",
             oid=self._oid, cq=cmd_queue)
-    def home_start(self, print_time, sample_time, oversample_count, rest_time, treshold):
+    def home_start(self, print_time, sample_time, oversample_count, rest_time,
+                   treshold):
         clock = self._mcu.print_time_to_clock(print_time)
-        rest_ticks = self._mcu.print_time_to_clock(print_time+rest_time) - clock
+        rest_ticks = self._mcu.print_time_to_clock(print_time+rest_time) \
+                     - clock
         self._rest_ticks = rest_ticks
         reactor = self._mcu.get_printer().get_reactor()
         self._trigger_completion = reactor.completion()
@@ -928,8 +935,9 @@ class MCU:
         self.register_response(self._handle_mcu_stats, 'stats')
     # Config creation helpers
     def setup_pin(self, pin_type, pin_params):
-        pcs = {'endstop': MCU_endstop, 'digital_out': MCU_digital_out, 'pwm': MCU_pwm,
-               'adc': MCU_adc, 'analog_endstop': MCU_analog_endstop}
+        pcs = {'endstop': MCU_endstop, 'digital_out': MCU_digital_out,
+               'pwm': MCU_pwm, 'adc': MCU_adc,
+               'analog_endstop': MCU_analog_endstop}
         if pin_type not in pcs:
             raise pins.error("pin type %s not supported on mcu" % (pin_type,))
         return pcs[pin_type](self, pin_params)

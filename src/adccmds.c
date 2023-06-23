@@ -211,12 +211,14 @@ command_config_analog_endstop(uint32_t *args)
     a->timer.func = analog_endstop_event;
     a->pin = pin;
 }
-DECL_COMMAND(command_config_analog_endstop, "config_analog_endstop oid=%c pin=%u");
+DECL_COMMAND(command_config_analog_endstop,
+    "config_analog_endstop oid=%c pin=%u");
 
 void
 command_analog_endstop_home(uint32_t *args)
 {
-    struct analog_endstop *e = oid_lookup(args[0], command_config_analog_endstop);
+    struct analog_endstop *e = oid_lookup(args[0],
+        command_config_analog_endstop);
     sched_del_timer(&e->timer);
     e->timer.waketime = args[1];
     e->sample_time = args[2];
@@ -234,8 +236,9 @@ command_analog_endstop_home(uint32_t *args)
     sched_add_timer(&e->timer);
 }
 DECL_COMMAND(command_analog_endstop_home,
-             "analog_endstop_home oid=%c clock=%u sample_ticks=%u oversample_count=%c"
-             " rest_ticks=%u treshold=%u trsync_oid=%c trigger_reason=%c");
+             "analog_endstop_home oid=%c clock=%u sample_ticks=%u "
+             "oversample_count=%c rest_ticks=%u treshold=%u trsync_oid=%c "
+             "trigger_reason=%c");
 
 void
 command_analog_endstop_query_state(uint32_t *args)
@@ -243,11 +246,11 @@ command_analog_endstop_query_state(uint32_t *args)
     uint8_t oid = args[0];
     struct analog_endstop *e = oid_lookup(oid, command_config_analog_endstop);
 
-    //irq_disable(); - no need for sync within single statement. At least I think...
+    //irq_disable(); - no need for sync within single statement, I think...
     uint32_t nextwake = e->nextwake;
     //irq_enable();
 
-    //wait for ADC. Maybe I have just created infinite loop of death...
+    //wait for ADC.
     uint32_t sample_delay = 0;
     do {
         sample_delay = gpio_adc_sample(e->pin);
@@ -256,4 +259,5 @@ command_analog_endstop_query_state(uint32_t *args)
     sendf("analog_endstop_state oid=%c next_clock=%u pin_value=%u treshold=%u"
           , oid, nextwake, gpio_adc_read(e->pin), e->treshold);
 }
-DECL_COMMAND(command_analog_endstop_query_state, "analog_endstop_query_state oid=%c");
+DECL_COMMAND(command_analog_endstop_query_state,
+    "analog_endstop_query_state oid=%c");

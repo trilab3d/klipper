@@ -11,11 +11,15 @@ import statistics
 class AnalogEndstopWrapper:
     def __init__(self, config):
         self.printer = config.get_printer()
-        self.printer.register_event_handler("klippy:connect", self.handle_connect)
-        self.printer.register_event_handler('klippy:mcu_identify', self.handle_mcu_identify)
+        self.printer.register_event_handler("klippy:connect",
+                                            self.handle_connect)
+        self.printer.register_event_handler('klippy:mcu_identify',
+                                            self.handle_mcu_identify)
         self.position_endstop = config.getfloat('z_offset')
-        self.stow_on_each_sample = config.getboolean('stow_on_each_sample', True)
-        self.probe_touch_mode = config.getboolean('probe_with_touch_mode', False)
+        self.stow_on_each_sample = config.getboolean('stow_on_each_sample',
+                                                     True)
+        self.probe_touch_mode = config.getboolean('probe_with_touch_mode',
+                                                  False)
         # Command timing
         self.next_cmd_time = self.action_end_time = 0.
         self.finish_home_complete = self.wait_trigger_complete = None
@@ -35,7 +39,8 @@ class AnalogEndstopWrapper:
         self.query_endstop = self.mcu_endstop.query_endstop
         # Register BLTOUCH_DEBUG command
         self.gcode = self.printer.lookup_object('gcode')
-        self.gcode.register_command("ANALOG_PROBE_DEBUG", self.cmd_ANALOG_PROBE_DEBUG,
+        self.gcode.register_command("ANALOG_PROBE_DEBUG",
+                                    self.cmd_ANALOG_PROBE_DEBUG,
                                     desc=self.cmd_ANALOG_PROBE_DEBUG_help)
         # multi probes state
         self.multi = 'OFF'
@@ -69,7 +74,8 @@ class AnalogEndstopWrapper:
         q1 = quantiles[0]
         q2 = quantiles[1]
         q3 = quantiles[2]
-        logging.info(f"ADC base value set to {self.base_adc}. min:{min_v}, q1:{q1}, q2:{q2}, q3:{q3}, max:{max_v}")
+        logging.info(f"ADC base value set to {self.base_adc}. min:{min_v}, "
+                     f"q1:{q1}, q2:{q2}, q3:{q3}, max:{max_v}")
 
         if self.stow_on_each_sample:
             return
@@ -87,10 +93,12 @@ class AnalogEndstopWrapper:
             if self.multi == 'FIRST':
                 self.multi = 'ON'
         self.sync_print_time()
-    def home_start(self, print_time, sample_time, oversample_count, rest_time, triggered=None):
+    def home_start(self, print_time, sample_time, oversample_count, rest_time,
+                   triggered=None):
         rest_time = rest_time
         self.finish_home_complete = self.mcu_endstop.home_start(
-            print_time, sample_time, oversample_count, rest_time, self.base_adc + self.treshold)
+            print_time, sample_time, oversample_count, rest_time,
+            self.base_adc + self.treshold)
         # Schedule wait_for_trigger callback
         r = self.printer.get_reactor()
         self.wait_trigger_complete = r.register_callback(self.wait_for_trigger)
@@ -106,10 +114,13 @@ class AnalogEndstopWrapper:
     cmd_ANALOG_PROBE_DEBUG_help = "Returns analog probe debug report"
     def cmd_ANALOG_PROBE_DEBUG(self, gcmd):
         # cmd = gcmd.get('COMMAND', None)
-        gcmd.respond_info(f"Analog Probe debug. ADC Value={self.mcu_endstop.query_endstop()}, ADC base value = {self.base_adc}, treshold={self.treshold}")
+        gcmd.respond_info(f"Analog Probe debug. ADC Value="
+                          f"{self.mcu_endstop.query_endstop()}, ADC base value"
+                          f" = {self.base_adc}, treshold={self.treshold}")
         self.sync_print_time()
 
 def load_config(config):
     endstop = AnalogEndstopWrapper(config)
-    config.get_printer().add_object('probe', probe.PrinterProbe(config, endstop))
+    config.get_printer().add_object('probe',
+                                    probe.PrinterProbe(config,endstop))
     return endstop
