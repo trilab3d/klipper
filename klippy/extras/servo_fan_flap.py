@@ -30,8 +30,8 @@ class ServoFanFlap:
 
         self.is_print_fan = config.getboolean("is_print_fan", False)
         self.open_at_sp = config.getboolean("open_at_sp", False)
-        self.min_pulse_width = config.getfloat("min_pulse_width", 0.001)
-        self.max_pulse_width = config.getfloat("max_pulse_width", 0.002)
+        self.min_pulse_width = config.getfloat("minimum_pulse_width", 0.001)
+        self.max_pulse_width = config.getfloat("maximum_pulse_width", 0.002)
         self.start_value = config.getfloat(
             "start_value", 0, minval=0, maxval=1)
         self.last_value = -1
