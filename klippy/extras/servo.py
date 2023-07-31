@@ -3,6 +3,7 @@
 # Copyright (C) 2017-2020  Kevin O'Connor <kevin@koconnor.net>
 #
 # This file may be distributed under the terms of the GNU GPLv3 license.
+import logging
 
 SERVO_SIGNAL_PERIOD = 0.020
 PIN_MIN_TIME = 0.100
@@ -66,8 +67,11 @@ class PrinterServo:
             angle = gcmd.get_float('ANGLE')
             self._set_pwm(print_time, self._get_pwm_from_angle(angle))
     def set_width(self, width):
+        #width = round(width, 4)
         print_time = self.printer.lookup_object('toolhead').get_last_move_time()
-        self._set_pwm(print_time, self._get_pwm_from_pulse_width(width))
+        pwm = self._get_pwm_from_pulse_width(width)
+        logging.info(f"Set servo width {width}. Calculated PWM: {pwm}, print time {print_time}")
+        self._set_pwm(print_time, pwm)
 
     def power_off(self):
         print_time = self.printer.lookup_object('toolhead').get_last_move_time()

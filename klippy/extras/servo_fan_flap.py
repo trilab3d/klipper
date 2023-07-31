@@ -2,18 +2,19 @@ import logging
 import math
 from . import servo
 from enum import Enum
+import threading
 
 SAMPLE_TIME = 0.001
 SAMPLE_COUNT = 8
 REPORT_TIME = 0.100
 RANGE_CHECK_COUNT = 4
 
-class TUNING_PHASE(Enum):
-    WAITING = 1
-    PHASE_1 = 2
-    PHASE_2 = 3
+class SERVO_STATE_MACHINE(Enum):
+    TUNING_START = 1
+    TUNING_PHASE_1 = 2
+    TUNING_PHASE_2 = 3
     TUNED = 4
-    FAILED = 5
+    ALL_DONE = 5
 
 
 class ServoFanFlap:
@@ -27,6 +28,7 @@ class ServoFanFlap:
         self.last_adc = 0
         self.printer = config.get_printer()
         self.reactor = self.printer.get_reactor()
+        self.lock = threading.Lock()
 
         self.is_print_fan = config.getboolean("is_print_fan", False)
         self.open_at_sp = config.getboolean("open_at_sp", False)
@@ -46,10 +48,9 @@ class ServoFanFlap:
         self.tuning_start_time = config.getfloat("tuning_start_time", 0.1)
         self.tuning_step_time = config.getfloat("tuning_step_time", 3)
         if config.getboolean("perform_range_tune", False):
-            self.tuning_state = TUNING_PHASE.WAITING
+            self.tuning_state = SERVO_STATE_MACHINE.TUNING_START
         else:
-            self.tuning_state = TUNING_PHASE.TUNED
-            self.set_value(self.start_value)
+            self.tuning_state = SERVO_STATE_MACHINE.TUNED
 
         # register ADC pin
         ppins = self.printer.lookup_object('pins')
@@ -83,7 +84,7 @@ class ServoFanFlap:
     def cmd_FLAP_DEBUG(self, gcmd):
         gcmd.respond_info(f"Last ADC reading: {self.last_adc}, min pulse "
                           f"width: {self.min_pulse_width}, max pulse width: "
-                          f"{self.max_pulse_width}")
+                          f"{self.max_pulse_width}, servo state machine: {self.tuning_state}")
     def cmd_FLAP_SET(self, gcmd):
         val = gcmd.get_float('VALUE', minval=0., maxval= 255.)
         if val > 1:
@@ -113,10 +114,11 @@ class ServoFanFlap:
         # callibration, but once created, I can't stop it. So I check servo
         # timeout here. If it can't be stopped, it will suffer for rest of
         # his poor life as general program loop.
-        if self.tuning_state != TUNING_PHASE.TUNED:
-            self._handle_range_tuning(last_read_time, last_value)
-        self._handle_timeout()
-        self.last_adc = last_value
+        with self.lock:
+            if self.tuning_state != SERVO_STATE_MACHINE.ALL_DONE:
+                self._handle_range_tuning(last_read_time, last_value)
+            self._handle_timeout()
+            self.last_adc = last_value
 
     def _handle_timeout(self):
         if self.power_off_time > 0:
@@ -127,14 +129,14 @@ class ServoFanFlap:
     def _handle_range_tuning(self, last_read_time, last_value):
         eventtime = self.reactor.monotonic()
         print_time = self.mcu.estimated_print_time(eventtime)
-        if self.tuning_state == TUNING_PHASE.WAITING:
+        if self.tuning_state == SERVO_STATE_MACHINE.TUNING_START:
             self.power_off_timeout = eventtime + self.power_off_time
             self.servo.set_width(self.actual_tuning_width)
             self.tuning_timeout = print_time + self.tuning_start_time
-            self.tuning_state = TUNING_PHASE.PHASE_1
+            self.tuning_state = SERVO_STATE_MACHINE.TUNING_PHASE_1
             return
 
-        if self.tuning_state == TUNING_PHASE.PHASE_1:
+        if self.tuning_state == SERVO_STATE_MACHINE.TUNING_PHASE_1:
             if last_read_time < self.tuning_timeout:
                 return
             if last_value > self.tuning_treshold:
@@ -142,7 +144,7 @@ class ServoFanFlap:
                 self.actual_tuning_width = self.min_pulse_width + (
                         self.max_pulse_width - self.min_pulse_width) * 0.5
                 self.max_pulse_width = max_w
-                self.tuning_state = TUNING_PHASE.PHASE_2
+                self.tuning_state = SERVO_STATE_MACHINE.TUNING_PHASE_2
                 self.tuning_timeout = print_time + self.tuning_start_time
             else:
                 self.actual_tuning_width += self.tuning_step
@@ -150,30 +152,32 @@ class ServoFanFlap:
                     self.actual_tuning_width = self.min_pulse_width + (
                             self.max_pulse_width - self.min_pulse_width) * 0.5
                     self.tuning_timeout = print_time + self.tuning_start_time
-                    self.tuning_state = TUNING_PHASE.PHASE_2
+                    self.tuning_state = SERVO_STATE_MACHINE.TUNING_PHASE_2
                 else:
                     self.tuning_timeout = print_time + self.tuning_step_time
             self.power_off_timeout = eventtime + self.power_off_time
             self.servo.set_width(self.actual_tuning_width)
             return
 
-        if self.tuning_state == TUNING_PHASE.PHASE_2:
+        if self.tuning_state == SERVO_STATE_MACHINE.TUNING_PHASE_2:
             if last_read_time < self.tuning_timeout:
                 return
             if last_value > self.tuning_treshold:
                 self.min_pulse_width = self.actual_tuning_width
-                self.tuning_state = TUNING_PHASE.TUNED
+                self.tuning_state = SERVO_STATE_MACHINE.TUNED
                 self.set_value(self.start_value)
             else:
                 self.actual_tuning_width -= self.tuning_step
                 if self.actual_tuning_width < self.min_pulse_width:
-                    self.tuning_state = TUNING_PHASE.TUNED
+                    self.tuning_state = SERVO_STATE_MACHINE.TUNED
                 else:
                     self.tuning_timeout = print_time + self.tuning_step_time
                     self.power_off_timeout = eventtime + self.power_off_time
                     self.servo.set_width(self.actual_tuning_width)
             return
-        if self.tuning_state == TUNING_PHASE.FAILED:
+        if self.tuning_state == SERVO_STATE_MACHINE.TUNED:
+            self.set_value(self.start_value)
+            self.tuning_state = SERVO_STATE_MACHINE.ALL_DONE
             return
 def load_config_prefix(config):
     return ServoFanFlap(config)
