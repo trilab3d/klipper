@@ -4,6 +4,7 @@
 #
 # This file may be distributed under the terms of the GNU GPLv3 license.
 import logging
+import math
 
 SERVO_SIGNAL_PERIOD = 0.020
 PIN_MIN_TIME = 0.100
@@ -46,6 +47,12 @@ class PrinterServo:
         if value == self.last_value:
             return
         print_time = max(print_time, self.last_value_time + PIN_MIN_TIME)
+
+        # align with PWM waveform
+        delta = print_time - self.last_value_time
+        delta_ceiled = math.ceil(delta * 50) / 50
+        print_time = self.last_value_time + delta_ceiled
+
         self.mcu_servo.set_pwm(print_time, value)
         self.last_value = value
         self.last_value_time = print_time
@@ -66,15 +73,15 @@ class PrinterServo:
         else:
             angle = gcmd.get_float('ANGLE')
             self._set_pwm(print_time, self._get_pwm_from_angle(angle))
-    def set_width(self, width):
+    def set_width(self, width, print_time=None):
         #width = round(width, 4)
-        print_time = self.printer.lookup_object('toolhead').get_last_move_time()
+        if not print_time:
+            print_time = self.printer.lookup_object('toolhead').get_last_move_time()
         pwm = self._get_pwm_from_pulse_width(width)
-        logging.info(f"Set servo width {width}. Calculated PWM: {pwm}, print time {print_time}")
         self._set_pwm(print_time, pwm)
 
-    def power_off(self):
-        print_time = self.printer.lookup_object('toolhead').get_last_move_time()
+    def power_off(self, print_time):
+        #print_time = self.printer.lookup_object('toolhead').get_last_move_time()
         self._set_pwm(print_time, 0)
 
 def load_config_prefix(config):

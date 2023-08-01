@@ -34,14 +34,16 @@ class ServoFanFlap:
         self.open_at_sp = config.getboolean("open_at_sp", False)
         self.min_pulse_width = config.getfloat("minimum_pulse_width", 0.001)
         self.max_pulse_width = config.getfloat("maximum_pulse_width", 0.002)
+        self.tuning_start_width = config.getfloat("tuning_start_width", self.min_pulse_width + (
+                self.max_pulse_width - self.min_pulse_width) * 0.5)
         self.start_value = config.getfloat(
             "start_value", 0, minval=0, maxval=1)
         self.last_value = -1
         self.power_off_time = config.getfloat("power_off_time", 0)
         self.power_off_timeout = 0
+        self.is_on = True
 
-        self.actual_tuning_width = self.min_pulse_width + (
-                self.max_pulse_width - self.min_pulse_width) * 0.5
+        self.actual_tuning_width = self.tuning_start_width
         self.tuning_timeout = 0
         self.tuning_step = config.getfloat("tuning_step", 0.000005)
         self.tuning_treshold = config.getfloat("tuning_treshold", 0)
@@ -107,6 +109,7 @@ class ServoFanFlap:
                                     self.min_pulse_width) * value
         eventtime = self.reactor.monotonic()
         self.power_off_timeout = eventtime + self.power_off_time
+        self.is_on = True
         self.servo.set_width(w)
 
     def _analog_feedback_callback(self, last_read_time, last_value):
@@ -117,14 +120,17 @@ class ServoFanFlap:
         with self.lock:
             if self.tuning_state != SERVO_STATE_MACHINE.ALL_DONE:
                 self._handle_range_tuning(last_read_time, last_value)
-            self._handle_timeout()
+            else:
+                self._handle_timeout(last_read_time)
+
             self.last_adc = last_value
 
-    def _handle_timeout(self):
+    def _handle_timeout(self, print_time):
         if self.power_off_time > 0:
             eventtime = self.reactor.monotonic()
-            if eventtime > self.power_off_timeout:
-                self.servo.power_off()
+            if eventtime > self.power_off_timeout and self.is_on:
+                self.is_on = False
+                self.servo.power_off(print_time)
 
     def _handle_range_tuning(self, last_read_time, last_value):
         eventtime = self.reactor.monotonic()
@@ -141,16 +147,14 @@ class ServoFanFlap:
                 return
             if last_value > self.tuning_treshold:
                 max_w = self.actual_tuning_width
-                self.actual_tuning_width = self.min_pulse_width + (
-                        self.max_pulse_width - self.min_pulse_width) * 0.5
+                self.actual_tuning_width = self.tuning_start_width
                 self.max_pulse_width = max_w
                 self.tuning_state = SERVO_STATE_MACHINE.TUNING_PHASE_2
                 self.tuning_timeout = print_time + self.tuning_start_time
             else:
                 self.actual_tuning_width += self.tuning_step
                 if self.actual_tuning_width > self.max_pulse_width:
-                    self.actual_tuning_width = self.min_pulse_width + (
-                            self.max_pulse_width - self.min_pulse_width) * 0.5
+                    self.actual_tuning_width = self.tuning_start_width
                     self.tuning_timeout = print_time + self.tuning_start_time
                     self.tuning_state = SERVO_STATE_MACHINE.TUNING_PHASE_2
                 else:
