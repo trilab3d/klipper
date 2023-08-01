@@ -141,6 +141,65 @@ class Heater:
         pheaters = self.printer.lookup_object('heaters')
         pheaters.set_temperature(self, temp)
 
+class HeaterMaster(Heater):
+    def __init__(self, config, sensor):
+        self.printer = config.get_printer()
+        self.name = config.get_name().split()[-1]
+        # Setup sensor
+        self.sensor = sensor
+        self.min_temp = config.getfloat('min_temp', minval=KELVIN_TO_CELSIUS)
+        self.max_temp = config.getfloat('max_temp', above=self.min_temp)
+        self.sensor.setup_minmax(self.min_temp, self.max_temp)
+        self.sensor.setup_callback(self.temperature_callback)
+        # Setup temperature checks
+        self.min_extrude_temp = config.getfloat(
+            'min_extrude_temp', 170.,
+            minval=self.min_temp, maxval=self.max_temp)
+        is_fileoutput = (self.printer.get_start_args().get('debugoutput')
+                         is not None)
+        self.can_extrude = self.min_extrude_temp <= 0. or is_fileoutput
+        self.max_power = config.getfloat('max_power', 1., above=0., maxval=1.)
+        self.smooth_time = config.getfloat('smooth_time', 1., above=0.)
+        self.inv_smooth_time = 1. / self.smooth_time
+        self.lock = threading.Lock()
+        self.last_temp = self.smoothed_temp = self.target_temp = 0.
+        self.last_temp_time = 0.
+        # pwm caching
+        self.next_pwm_time = 0.
+        self.last_pwm_value = 0.
+        # Setup control algorithm sub-class
+        algos = {'watermark': ControlBangBang, 'pid': ControlPID}
+        algo = config.getchoice('control', algos)
+        self.control = algo(self, config)
+        # Setup slave heater
+        pheaters = self.printer.lookup_object('heaters')
+        self.slave_heater = pheaters.lookup_heater(config.get('slave_heater'))
+        self.pwm_delay = 1  # update pwm every second
+        # Load additional modules
+        self.printer.load_object(config, "verify_heater %s" % (self.name,))
+        self.printer.load_object(config, "pid_calibrate")
+        gcode = self.printer.lookup_object("gcode")
+        gcode.register_mux_command("SET_HEATER_TEMPERATURE", "HEATER",
+                                   self.name, self.cmd_SET_HEATER_TEMPERATURE,
+                                   desc=self.cmd_SET_HEATER_TEMPERATURE_help)
+
+    def set_pwm(self, read_time, value):
+        if self.target_temp <= 0.:
+            value = 0.
+        if ((read_time < self.next_pwm_time or not self.last_pwm_value)
+            and abs(value - self.last_pwm_value) < 0.05):
+            # No significant change in value - can suppress update
+            return
+        pwm_time = read_time + self.pwm_delay
+        self.next_pwm_time = pwm_time + 0.75 * MAX_HEAT_TIME
+        self.last_pwm_value = value
+        slave_temp = (self.slave_heater.max_temp - 10) * value
+        self.slave_heater.set_temp(slave_temp)
+
+    def get_temp(self, eventtime):
+        with self.lock:
+            return self.smoothed_temp, self.target_temp
+
 
 ######################################################################
 # Bang-bang control algo
@@ -255,14 +314,17 @@ class PrinterHeaters:
             self.printer.load_object(dconfig, c.get_name())
     def add_sensor_factory(self, sensor_type, sensor_factory):
         self.sensor_factories[sensor_type] = sensor_factory
-    def setup_heater(self, config, gcode_id=None):
+    def setup_heater(self, config, gcode_id=None, master=False):
         heater_name = config.get_name().split()[-1]
         if heater_name in self.heaters:
             raise config.error("Heater %s already registered" % (heater_name,))
         # Setup sensor
         sensor = self.setup_sensor(config)
         # Create heater
-        self.heaters[heater_name] = heater = Heater(config, sensor)
+        if master:
+            self.heaters[heater_name] = heater = HeaterMaster(config, sensor)
+        else:
+            self.heaters[heater_name] = heater = Heater(config, sensor)
         self.register_sensor(config, heater, gcode_id)
         self.available_heaters.append(config.get_name())
         return heater
