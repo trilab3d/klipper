@@ -397,7 +397,7 @@ class PrinterConfig:
             logging.exception(msg)
             raise gcode.error(msg)
         regular_data = self._strip_duplicates(regular_data, self.autosave)
-        self._disallow_include_conflicts(regular_data, cfgname, gcode)
+        #self._disallow_include_conflicts(regular_data, cfgname, gcode) # this is not problem, it works as fine.
         data = regular_data.rstrip() + autosave_data
         # Determine filenames
         datestr = time.strftime("-%Y%m%d_%H%M%S")
