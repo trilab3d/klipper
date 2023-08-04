@@ -8,8 +8,11 @@ from . import fan
 PIN_MIN_TIME = 0.100
 
 class PrinterHeaterFan:
+
+    cmd_HEATER_FAN_SET_SPEED_help = "Alter fan nominal speed. Usage: HEATER_FAN_SET_SPEED FAN=fan_name SPEED=<0.-1.>"
     def __init__(self, config):
         self.printer = config.get_printer()
+        self.fan_name = config.get_name().split()[-1]
         self.printer.load_object(config, 'heaters')
         self.printer.register_event_handler("klippy:ready", self.handle_ready)
         self.heater_names = config.getlist("heater", ("extruder",))
@@ -18,6 +21,16 @@ class PrinterHeaterFan:
         self.fan = fan.Fan(config, default_shutdown_speed=1.)
         self.fan_speed = config.getfloat("fan_speed", 1., minval=0., maxval=1.)
         self.last_speed = 0.
+        # register commands
+        gcode = self.printer.lookup_object("gcode")
+        gcode.register_mux_command("HEATER_FAN_SET_SPEED", "FAN",
+                                   self.fan_name,
+                                   self.cmd_HEATER_FAN_SET_SPEED,
+                                   desc=self.cmd_HEATER_FAN_SET_SPEED_help)
+    def cmd_HEATER_FAN_SET_SPEED(self, gcmd):
+        speed = gcmd.get_float('SPEED', None, minval=0., maxval=255.)
+        if speed is not None:
+            self.fan_speed = speed
     def handle_ready(self):
         pheaters = self.printer.lookup_object('heaters')
         self.heaters = [pheaters.lookup_heater(n) for n in self.heater_names]
