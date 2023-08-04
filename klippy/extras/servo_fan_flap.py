@@ -16,6 +16,10 @@ class SERVO_STATE_MACHINE(Enum):
     TUNED = 4
     ALL_DONE = 5
 
+HINT_SERVO_FLAP = """
+This may indicate servo mechanism malfunction. Check servo wiring and flap mechanical parts.
+"""
+
 
 class ServoFanFlap:
     cmd_FLAP_DEBUG_help = "Returns debug informations."
@@ -57,6 +61,13 @@ class ServoFanFlap:
             self.tuning_state = SERVO_STATE_MACHINE.TUNING_START
         else:
             self.tuning_state = SERVO_STATE_MACHINE.TUNED
+
+        self.validate_upper_max = config.getfloat("validate_upper_max", None)
+        self.validate_upper_min = config.getfloat("validate_upper_min", None)
+        self.validate_lower_max = config.getfloat("validate_lower_max", None)
+        self.validate_lower_min = config.getfloat("validate_lower_min", None)
+        self.validate_range_max = config.getfloat("validate_range_max", None)
+        self.validate_range_min = config.getfloat("validate_range_min", None)
 
         # register ADC pin
         ppins = self.printer.lookup_object('pins')
@@ -172,14 +183,14 @@ class ServoFanFlap:
             eventtime = self.reactor.monotonic()
             if eventtime > self.power_off_timeout and self.is_on:
                 self.is_on = False
-                self.servo.power_off(print_time)
+                self.servo.power_off(print_time + 0.005)
 
     def _handle_range_tuning(self, last_read_time, last_value):
         eventtime = self.reactor.monotonic()
         print_time = self.mcu.estimated_print_time(eventtime)
         if self.tuning_state == SERVO_STATE_MACHINE.TUNING_START:
             self.power_off_timeout = eventtime + self.power_off_time
-            self.servo.set_width(self.actual_tuning_width, print_time)
+            self.servo.set_width(self.actual_tuning_width, print_time + 0.005)
             self.tuning_timeout = print_time + self.tuning_start_time
             self.tuning_state = SERVO_STATE_MACHINE.TUNING_PHASE_1
             return
@@ -201,7 +212,7 @@ class ServoFanFlap:
                 else:
                     self.tuning_timeout = print_time + self.tuning_step_time
             self.power_off_timeout = eventtime + self.power_off_time
-            self.servo.set_width(self.actual_tuning_width, print_time)
+            self.servo.set_width(self.actual_tuning_width, print_time + 0.005)
             return
 
         if self.tuning_state == SERVO_STATE_MACHINE.TUNING_PHASE_2:
@@ -210,7 +221,7 @@ class ServoFanFlap:
             if last_value > self.tuning_treshold:
                 self.min_pulse_width = self.actual_tuning_width + self.tuning_spring_back
                 self.tuning_state = SERVO_STATE_MACHINE.TUNED
-                self.set_value(self.start_value, print_time)
+                self.set_value(self.start_value, print_time + 0.005)
             else:
                 self.actual_tuning_width -= self.tuning_step
                 if self.actual_tuning_width < self.min_pulse_width:
@@ -218,9 +229,49 @@ class ServoFanFlap:
                 else:
                     self.tuning_timeout = print_time + self.tuning_step_time
                     self.power_off_timeout = eventtime + self.power_off_time
-                    self.servo.set_width(self.actual_tuning_width, print_time)
+                    self.servo.set_width(self.actual_tuning_width, print_time + 0.005)
             return
         if self.tuning_state == SERVO_STATE_MACHINE.TUNED:
+
+            is_invalid = False
+            msg = f"Servo flap {self.flap_name} seems to have invalid range. Following error occured:\n"
+
+            if self.validate_upper_max is not None:
+                if self.max_pulse_width > self.validate_upper_max:
+                    is_invalid = True
+                    msg += f"Max_pulse_width should be <= {self.validate_upper_max}, but is {self.max_pulse_width}.\n"
+
+            if self.validate_upper_min is not None:
+                if self.max_pulse_width < self.validate_upper_min:
+                    is_invalid = True
+                    msg += f"Max_pulse_width should be >= {self.validate_upper_min}, but is {self.max_pulse_width}.\n"
+
+            if self.validate_lower_max is not None:
+                if self.min_pulse_width > self.validate_lower_max:
+                    is_invalid = True
+                    msg += f"Min_pulse_width should be <= {self.validate_lower_max}, but is {self.min_pulse_width}.\n"
+
+            if self.validate_lower_min is not None:
+                if self.min_pulse_width < self.validate_lower_min:
+                    is_invalid = True
+                    msg += f"Min_pulse_width should be >= {self.validate_lower_min}, but is {self.min_pulse_width}.\n"
+
+            range = self.max_pulse_width - self.min_pulse_width
+
+            if self.validate_range_max is not None:
+                if range > self.validate_range_min:
+                    is_invalid = True
+                    msg += f"Range should be <= {self.validate_range_max}, but is {range}. "
+
+            if self.validate_range_min is not None:
+                if range < self.validate_lower_min:
+                    is_invalid = True
+                    msg += f"Range should be >= {self.validate_range_min}, but is {range}. "
+
+            if is_invalid:
+                self.printer.invoke_shutdown(msg + HINT_SERVO_FLAP)
+                return
+
             self.set_value(self.start_value, print_time)
             self.tuning_state = SERVO_STATE_MACHINE.ALL_DONE
             return
