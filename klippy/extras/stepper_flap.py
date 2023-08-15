@@ -2,7 +2,6 @@ import logging
 import math
 import stepper, chelper
 from enum import Enum
-import threading
 from . import force_move
 
 class SERVO_STATE_MACHINE(Enum):
@@ -18,10 +17,15 @@ class StepperFlap:
         self.flap_name = config.get_name().split()[-1]
         self.printer = config.get_printer()
         self.reactor = self.printer.get_reactor()
-        self.lock = threading.Lock()
+
         self.stepper = stepper.PrinterStepper(config)
         self.printer.register_event_handler('klippy:connect',
                                             self._handle_connect)
+        
+        self.requested_value = 0
+        self.current_value = 0
+
+        self.update_timer = self.reactor.register_timer(self.do_update_value)
         self.disable_timer = self.reactor.register_timer(self.do_disable)
 
         self.velocity = config.getfloat('velocity', 5., above=0.)
@@ -48,8 +52,12 @@ class StepperFlap:
         if self.is_print_fan:
             gcode.register_command("M106", self.cmd_M106)
             gcode.register_command("M107", self.cmd_M107)
+
     def _handle_connect(self):
         self.toolhead = self.printer.lookup_object('toolhead')
+
+        self.update_timer.waketime = self.reactor.monotonic() + 2
+
     def cmd_FLAP_SET(self, gcmd):
         width = gcmd.get_float('WIDTH', None)
         if width is not None:
@@ -58,20 +66,35 @@ class StepperFlap:
             val = gcmd.get_float('VALUE', minval=0., maxval= 255.)
             if val > 1:
                 val = val / 255
-            self.set_value(val)
+            self.requested_value = val
 
     def cmd_M106(self, gcmd):
-        val = gcmd.get_float('S', 255., minval=0.) / 255.
-        self.set_value(val)
+        self.requested_value = gcmd.get_float('S', 255., minval=0.) / 255.
+        
     def cmd_M107(self, gcmd):
-        self.set_value(0)
+        self.requested_value = 0
+
+    def do_update_value(self, time):
+        move_time = 0.05
+        if self.current_value != self.requested_value:
+            move_time = self.set_value(self.requested_value)
+
+        self.current_value = self.requested_value
+
+        return self.reactor.monotonic() + move_time
+    
+    def do_disable(self, arg):
+        stepper_enable = self.printer.lookup_object('stepper_enable')
+        se = stepper_enable.lookup_enable(self.stepper.get_name())
+        self.toolhead.register_lookahead_callback((lambda pt: se.motor_disable(pt)))
+        return self.reactor.NEVER
 
     def set_value(self, value):
         self.disable_timer.waketime = self.reactor.NEVER
-        self.do_move(value, self.velocity, self.accel)
-        logging.info(f"Servo Flap move. Monotonic: {self.reactor.monotonic()}, next cmd time: {self.next_cmd_time}")
+        move_time = self.do_move(value, self.velocity, self.accel)
         self.disable_timer.waketime = self.reactor.monotonic() + 1
 
+        return move_time
 
     def sync_print_time(self):
         curtime = self.reactor.monotonic()
@@ -83,14 +106,6 @@ class StepperFlap:
         else:
             self.next_cmd_time = print_time
 
-    def do_disable(self,arg):
-        stepper_enable = self.printer.lookup_object('stepper_enable')
-        se = stepper_enable.lookup_enable(self.stepper.get_name())
-        self.toolhead.register_lookahead_callback((lambda pt: se.motor_disable(pt)))
-        return self.reactor.NEVER
-
-    def do_set_position(self, setpos):
-        self.stepper.set_position([setpos, 0., 0.])
     def do_move(self, movepos, speed, accel):
         self.sync_print_time()
         cp = self.stepper.get_commanded_position()
