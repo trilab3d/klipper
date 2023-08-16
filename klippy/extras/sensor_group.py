@@ -65,7 +65,7 @@ class SensorGroupFactory:
         self.name = " ".join(config.get_name().split()[1:])
         pheaters = config.get_printer().load_object(config, "heaters")
         self.num_sensors = config.getint("num_sensors")
-        self.max_absolute_deviation = config.getfloat("max_absolute_deviation", None)
+        self.max_absolute_deviation = config.getfloat("max_absolute_deviation", 20)
         self.sensors = []
         for i in range(self.num_sensors):
             prefix = f"sensor_{i+1}_"
