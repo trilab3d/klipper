@@ -585,7 +585,7 @@ class MCU_analog_endstop:
         self._mcu.add_config_cmd("config_analog_endstop oid=%d pin=%s" %
                                  (self._oid, self._pin))
         self._mcu.add_config_cmd(
-            "analog_endstop_home oid=%c clock=0 sample_ticks=0 "
+            "analog_endstop_home oid=%d clock=0 sample_ticks=0 "
             "oversample_count=0 rest_ticks=0 treshold=0 trsync_oid=0 "
             "trigger_reason=0"
             % (self._oid,), on_restart=True)

@@ -5,7 +5,7 @@ from configfile import ConfigWrapper
 KELVIN_TO_CELSIUS = -273.15
 class SensorGroup:
     cmd_SENSOR_GROUP_DEBUG_help = "Return sensor group temperatures"
-    def __init__(self, config, sensors, name):
+    def __init__(self, config, sensors, name, max_absolute_deviation):
         self.name = name
         self.num_sensors = len(sensors)
         self.temps = [0]*self.num_sensors
@@ -13,6 +13,7 @@ class SensorGroup:
         self.last_valid_temps = [0]*self.num_sensors
         self.last_temp = 0
         self.sensors = sensors
+        self.max_absolute_deviation = max_absolute_deviation
         for i, s in enumerate(self.sensors):
             cb = self._callback_factory(i)
             s.setup_callback(cb)
@@ -43,6 +44,11 @@ class SensorGroup:
                     self.last_valid_temps[i] = t
                 awg = awg / self.num_sensors
                 self.last_temp = awg
+                if self.max_absolute_deviation is not None:
+                    for i, t in enumerate(self.temps):
+                        if abs(t-awg) > self.max_absolute_deviation:
+                            self.printer.invoke_shutdown(f"Sensor group {self.name} sensor {i} deviated so much "
+                                                         f"from average. Avg temp: {awg}, Sensor temps: {self.temps}")
                 if self.temperature_callback is not None:
                     self.temperature_callback(read_time, awg)
         return cb
@@ -52,7 +58,6 @@ class SensorGroup:
         return 0
     def setup_minmax(self, min_temp, max_temp):
         for s in self.sensors:
-            #s.setup_minmax(min_temp, max_temp)
             s.setup_minmax(min_temp, max_temp)
 
 class SensorGroupFactory:
@@ -60,6 +65,7 @@ class SensorGroupFactory:
         self.name = " ".join(config.get_name().split()[1:])
         pheaters = config.get_printer().load_object(config, "heaters")
         self.num_sensors = config.getint("num_sensors")
+        self.max_absolute_deviation = config.getfloat("max_absolute_deviation", 20)
         self.sensors = []
         for i in range(self.num_sensors):
             prefix = f"sensor_{i+1}_"
@@ -71,7 +77,7 @@ class SensorGroupFactory:
             self.sensors.append(pheaters.setup_sensor(sensor_config))
 
     def create(self, config):
-        return SensorGroup(config, self.sensors, self.name)
+        return SensorGroup(config, self.sensors, self.name, self.max_absolute_deviation)
 
 def load_config_prefix(config):
     sensor_group_factory = SensorGroupFactory(config)
