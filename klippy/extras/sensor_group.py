@@ -55,7 +55,7 @@ class SensorGroup:
     def setup_callback(self, temperature_callback):
         self.temperature_callback = temperature_callback
     def get_report_time_delta(self):
-        return 0
+        return 0.5
     def setup_minmax(self, min_temp, max_temp):
         for s in self.sensors:
             s.setup_minmax(min_temp, max_temp)
