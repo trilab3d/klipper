@@ -228,7 +228,6 @@ class ControlBangBang:
 # Proportional Integral Derivative (PID) control algo
 ######################################################################
 
-PID_SETTLE_DELTA = 1.
 PID_SETTLE_SLOPE = .1
 
 class ControlPID:
@@ -238,6 +237,8 @@ class ControlPID:
         self.Kp = config.getfloat('pid_Kp') / PID_PARAM_BASE
         self.Ki = config.getfloat('pid_Ki') / PID_PARAM_BASE
         self.Kd = config.getfloat('pid_Kd') / PID_PARAM_BASE
+        self.pid_settle_delta_negative = config.getfloat('pid_settle_delta_negative', 2.)
+        self.pid_settle_delta_positive = config.getfloat('pid_settle_delta_positive', 5.)
         self.min_deriv_time = heater.get_smooth_time()
         self.temp_integ_max = 0.
         if self.Ki:
@@ -273,7 +274,7 @@ class ControlPID:
             self.prev_temp_integ = temp_integ
     def check_busy(self, eventtime, smoothed_temp, target_temp):
         temp_diff = target_temp - smoothed_temp
-        return (abs(temp_diff) > PID_SETTLE_DELTA
+        return (temp_diff > self.pid_settle_delta_negative or temp_diff < -self.pid_settle_delta_positive
                 or abs(self.prev_temp_deriv) > PID_SETTLE_SLOPE)
 
 
