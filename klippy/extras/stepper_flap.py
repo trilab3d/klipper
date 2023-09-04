@@ -52,6 +52,10 @@ class StepperFlap:
                                    self.flap_name,
                                    self.cmd_FLAP_SET,
                                    desc=self.cmd_FLAP_SET_help)
+        gcode.register_mux_command("SET_FAN_SPEED", "FAN",
+                                   self.flap_name,
+                                   self.cmd_FLAP_SET,
+                                   desc="")
 
     def _handle_connect(self):
         self.toolhead = self.printer.lookup_object('toolhead')
@@ -60,7 +64,7 @@ class StepperFlap:
         self.disable_timer.waketime = self.reactor.monotonic() + 2            
 
     def cmd_FLAP_SET(self, gcmd):
-        val = gcmd.get_float('VALUE', minval=0., maxval= 255.)
+        val = gcmd.get_float('SPEED', minval=0., maxval= 255.)
         if val > 1:
             val = val / 255
         self.set_value(val)
@@ -130,6 +134,11 @@ class StepperFlap:
             self.sync_print_time()
         self.disable_timer.waketime = self.reactor.monotonic() + 2
         return accel_t + cruise_t + accel_t
+
+    def get_status(self, eventtime):
+        return {
+            'speed': self.requested_value
+        }
 
 def load_config_prefix(config):
     return StepperFlap(config)

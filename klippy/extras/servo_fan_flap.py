@@ -98,6 +98,10 @@ class ServoFanFlap:
                                    self.flap_name,
                                    self.cmd_FLAP_AUTOTUNE,
                                    desc=self.cmd_FLAP_AUTOTUNE_help)
+        gcode.register_mux_command("SET_FAN_SPEED", "FAN",
+                                   self.flap_name,
+                                   self.cmd_FLAP_SET,
+                                   desc="")
         if self.is_print_fan:
             gcode.register_command("M106", self.cmd_M106)
             gcode.register_command("M107", self.cmd_M107)
@@ -111,7 +115,7 @@ class ServoFanFlap:
         if width is not None:
             self.servo.set_width(width)
         else:
-            val = gcmd.get_float('VALUE', minval=0., maxval= 255.)
+            val = gcmd.get_float('SPEED', minval=0., maxval= 255.)
             if val > 1:
                 val = val / 255
             self.set_value(val)
@@ -164,6 +168,11 @@ class ServoFanFlap:
         self.power_off_timeout = eventtime + self.power_off_time
         self.is_on = True
         self.servo.set_width(w, print_time)
+
+    def get_status(self, eventtime):
+        return {
+            'speed': self.last_value
+        }
 
     def _analog_feedback_callback(self, last_read_time, last_value):
         # This callback is called periodically. I need it for servo range
