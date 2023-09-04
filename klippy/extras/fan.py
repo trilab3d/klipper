@@ -23,26 +23,18 @@ class Fan:
         shutdown_speed = config.getfloat(
             'shutdown_speed', default_shutdown_speed, minval=0., maxval=1.)
         # Setup pwm object
-        self.mcu_fan = None
-        pin = config.get('pin', None)
-        if pin is not None:
-            ppins = self.printer.lookup_object('pins')
-            self.mcu_fan = ppins.setup_pin('pwm', config.get('pin'))
-            self.mcu_fan.setup_max_duration(0.)
-            self.mcu_fan.setup_cycle_time(cycle_time, hardware_pwm)
-            shutdown_power = max(0., min(self.max_power, shutdown_speed))
-            self.mcu_fan.setup_start_value(0., shutdown_power)
+        ppins = self.printer.lookup_object('pins')
+        self.mcu_fan = ppins.setup_pin('pwm', config.get('pin'))
+        self.mcu_fan.setup_max_duration(0.)
+        self.mcu_fan.setup_cycle_time(cycle_time, hardware_pwm)
+        shutdown_power = max(0., min(self.max_power, shutdown_speed))
+        self.mcu_fan.setup_start_value(0., shutdown_power)
 
         self.enable_pin = None
         enable_pin = config.get('enable_pin', None)
         if enable_pin is not None:
             self.enable_pin = ppins.setup_pin('digital_out', enable_pin)
             self.enable_pin.setup_max_duration(0.)
-
-        self.flap = None
-        flap_name = config.get('flap', None)
-        if flap_name is not None:
-            self.flap = self.printer.lookup_object(flap_name)
 
         # Setup tachometer
         self.tachometer = FanTachometer(config)
@@ -68,13 +60,9 @@ class Fan:
         if (value and value < self.max_power and self.kick_start_time
             and (not self.last_fan_value or value - self.last_fan_value > .5)):
             # Run fan at full speed for specified kick_start_time
-            if self.mcu_fan is not None:
-                self.mcu_fan.set_pwm(print_time, self.max_power)
+            self.mcu_fan.set_pwm(print_time, self.max_power)
             print_time += self.kick_start_time
-        if self.mcu_fan is not None:
-            self.mcu_fan.set_pwm(print_time, value)
-        if self.flap is not None:
-            self.flap.set_value(value)
+        self.mcu_fan.set_pwm(print_time, value)
         self.last_fan_time = print_time
         self.last_fan_value = value
     def set_speed_from_command(self, value):
