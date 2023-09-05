@@ -198,3 +198,48 @@ command_neopixel_send(uint32_t *args)
     sendf("neopixel_result oid=%c success=%c", oid, ret ? 0 : 1);
 }
 DECL_COMMAND(command_neopixel_send, "neopixel_send oid=%c");
+
+/****************************************************************
+ * Status LED
+ ****************************************************************/
+
+struct neopixel_s *status_led;
+
+void
+init_status_led(void)
+{
+    uint8_t pin_number = 13; //PA13 (Bank index * 32 + pin number)
+    struct gpio_out pin = gpio_out_setup(pin_number, 0);
+    uint16_t data_size = 3;
+    status_led = alloc_chunk(sizeof(*status_led) + data_size);
+    status_led->pin = pin;
+    status_led->data_size = data_size;
+    status_led->bit_max_ticks = 1200;
+    status_led->reset_min_ticks = 15000;
+    status_led->last_req_time = timer_read_time();
+    status_led->data[0] = 0; //G
+    status_led->data[1] = 255; //R
+    status_led->data[2] = 0; //B
+    send_data(status_led);
+}
+DECL_INIT(init_status_led);
+
+void
+set_status_led(uint32_t *args)
+{
+    uint_fast8_t data_len = args[0];
+    uint8_t *data = command_decode_ptr(args[1]);
+    memcpy(&status_led->data[0], data, data_len);
+    send_data(status_led);
+}
+DECL_COMMAND(set_status_led,
+             "set_status_led data=%*s");
+
+void
+status_led_shutdown_state(void)
+{
+    status_led->data[0] = 0; //G
+    status_led->data[1] = 255; //R
+    status_led->data[2] = 0; //B
+    send_data(status_led);
+}

@@ -328,6 +328,7 @@ static jmp_buf shutdown_jmp;
 void
 sched_shutdown(uint_fast8_t reason)
 {
+    status_led_shutdown_state();
     irq_disable();
     longjmp(shutdown_jmp, reason);
 }

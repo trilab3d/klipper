@@ -41,6 +41,9 @@ void sched_shutdown(uint_fast8_t reason) __noreturn;
 void sched_report_shutdown(void);
 void sched_main(void);
 
+//neopixel.h
+void status_led_shutdown_state(void);
+
 // Compiler glue for DECL_X macros above.
 #define _DECL_CALLLIST(NAME, FUNC)                                      \
     DECL_CTR("_DECL_CALLLIST " __stringify(NAME) " " __stringify(FUNC))
