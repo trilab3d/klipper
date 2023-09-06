@@ -205,6 +205,13 @@ DECL_COMMAND(command_neopixel_send, "neopixel_send oid=%c");
 
 struct neopixel_s *status_led;
 
+static uint_fast8_t
+display_status_led(struct timer *t)
+{
+    send_data(status_led);
+    return 0;
+}
+
 void
 init_status_led(void)
 {
@@ -216,11 +223,19 @@ init_status_led(void)
     status_led->data_size = data_size;
     status_led->bit_max_ticks = 1200;
     status_led->reset_min_ticks = 15000;
-    status_led->last_req_time = timer_read_time();
+    uint32_t time_now = timer_read_time();
+    status_led->last_req_time = time_now;
     status_led->data[0] = 0; //G
     status_led->data[1] = 255; //R
     status_led->data[2] = 0; //B
-    send_data(status_led);
+
+    //send_data(status_led); // this works on warm reset, bud on first cold reset bricks device
+
+    //workaround - schedule send_data in timer
+    struct timer time;
+    time.func = display_status_led;
+    time.waketime = time_now + 15000;
+    sched_add_timer(&time);
 }
 DECL_INIT(init_status_led);
 
