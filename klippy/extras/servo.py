@@ -78,7 +78,7 @@ class PrinterServo:
             pwm = self._get_pwm_from_pulse_width(width)
             self._set_pwm(print_time, pwm)
         else:
-            self._set_pwm(print_time, 0) #Poweroff
+            self._set_pwm(print_time, 0.) #Poweroff
 
 def load_config_prefix(config):
     return PrinterServo(config)

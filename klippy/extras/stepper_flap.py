@@ -43,8 +43,8 @@ class StepperFlap:
         self.stepper.set_trapq(self.trapq)
 
         self.invert = config.getboolean('invert', False)
-
         self.wanted_value = config.getfloat("start_value", 0, minval=0, maxval=1)
+        self.is_print_fan = config.getboolean("is_print_fan", False)
 
         # register commands
         gcode = self.printer.lookup_object("gcode")
@@ -56,6 +56,9 @@ class StepperFlap:
                                    self.flap_name,
                                    self.cmd_FLAP_SET,
                                    desc="")
+        if self.is_print_fan:
+            gcode.register_command("M106", self.cmd_M106)
+            gcode.register_command("M107", self.cmd_M107)
 
     def _handle_connect(self):
         self.toolhead = self.printer.lookup_object('toolhead')
@@ -68,6 +71,12 @@ class StepperFlap:
         if val > 1:
             val = val / 255
         self.set_value(val)
+
+    def cmd_M106(self, gcmd):
+        val = gcmd.get_float('S', 255., minval=0.) / 255.
+        self.set_value(val)
+    def cmd_M107(self, gcmd):
+        self.set_value(0)
 
     def set_value(self, value):
         if self.invert:
