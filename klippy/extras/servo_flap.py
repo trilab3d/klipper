@@ -27,7 +27,7 @@ This may indicate servo mechanism malfunction. Check servo wiring and flap mecha
 
 class ServoFanFlap:
     cmd_FLAP_SET_help = "Sets the flap position. Usage: FLAP_SET FLAP=flap_name " \
-                        "[ VALUE=<0. - 1.> | WIDTH=pulse_width ]"
+                        "[ VALUE=<0. - 1.> | WIDTH=<0.00005 - 0.00250> ]"
     cmd_FLAP_AUTOTUNE_help = "Finds flap range. Usage: FLAP_AUTOTUNE FLAP=flap_name " \
                              "MIN_PW=min_pulse_width MAX_PW=max_pulse_width START_PW=start_pulse_width " \
                              "SPRINGBACK=spring_back"
@@ -42,40 +42,58 @@ class ServoFanFlap:
         self.min_pulse_width = config.getfloat("minimum_pulse_width", 0.001)
         self.max_pulse_width = config.getfloat("maximum_pulse_width", 0.002)
         self.start_value = config.getfloat("start_value", 0, minval=0, maxval=1)
-        self.tuning_start_width = config.getfloat("tuning_start_width", self.min_pulse_width + (
-                self.max_pulse_width - self.min_pulse_width) * 0.5)
-        self.tuning_step = config.getfloat("tuning_step", 0.000005)
-        self.tuning_treshold = config.getfloat("tuning_treshold", 0.1)
-        self.tuning_start_time = config.getfloat("tuning_start_time", 1.5)
-        self.tuning_step_time = config.getfloat("tuning_step_time", 0.5)
-        self.tuning_spring_back = config.getfloat("tuning_spring_back", 0.0001)
-        self.validate_upper_max = config.getfloat("validate_upper_max", None)
-        self.validate_upper_min = config.getfloat("validate_upper_min", None)
-        self.validate_lower_max = config.getfloat("validate_lower_max", None)
-        self.validate_lower_min = config.getfloat("validate_lower_min", None)
-        self.validate_range_max = config.getfloat("validate_range_max", None)
-        self.validate_range_min = config.getfloat("validate_range_min", None)
-        self.is_print_fan = config.getboolean("is_print_fan", False)
         self.open_at_sp = config.getboolean("open_at_sp", False)
-
-        self.tuning_state = SERVO_STATE_MACHINE.NOT_TUNED
-        if config.getboolean("perform_range_tune", False):
-            self.tuning_state = SERVO_STATE_MACHINE.TUNING_START
+        self.is_print_fan = config.getboolean("is_print_fan", False)
 
         self.current_adc = 0.
         self.current_value = -1
         self.current_width = -1
         self.last_time = 0.
-        self.move_time = self.tuning_step_time
+        self.move_time = 0.2
         self.move_done = threading.Event()
         self.move_timer = self.reactor.register_timer(self.do_move_done)
         self.power_off_time = config.getfloat("power_off_time", 0)
         self.poweroff_timer = self.reactor.register_timer(self.do_poweroff)
-        self.tuning_running = False
+        self.tuning_state = SERVO_STATE_MACHINE.NOT_TUNED
 
-        # register ADC pin
+        self.printer.register_event_handler('klippy:connect',
+                                            self._handle_connect)
+
+        # register commands
+        gcode = self.printer.lookup_object("gcode")
+        gcode.register_mux_command("FLAP_SET", "FLAP",
+                                   self.flap_name,
+                                   self.cmd_FLAP_SET,
+                                   desc=self.cmd_FLAP_SET_help)
+        gcode.register_mux_command("SET_FAN_SPEED", "FAN",
+                                   self.flap_name,
+                                   self.cmd_SET_FAN_SPEED,
+                                   desc="")
+        if self.is_print_fan:
+            gcode.register_command("M106", self.cmd_M106)
+            gcode.register_command("M107", self.cmd_M107)
+
+        # Has feedback pin, allow autotune
         feedback_pin_name = config.get("feedback_pin", None)
         if feedback_pin_name is not None:
+            # Config for autotune
+            self.tuning_start_width = config.getfloat("tuning_start_width", self.min_pulse_width + (
+            self.max_pulse_width - self.min_pulse_width) * 0.5)
+            self.tuning_start_time = config.getfloat("tuning_start_time", 1.5)
+            self.tuning_step = config.getfloat("tuning_step", 0.000005)
+            self.tuning_step_time = config.getfloat("tuning_step_time", 0.5)
+            self.tuning_treshold = config.getfloat("tuning_treshold", 0.1)
+            self.tuning_spring_back = config.getfloat("tuning_spring_back", 0.0001)
+            self.validate_upper_max = config.getfloat("validate_upper_max", None)
+            self.validate_upper_min = config.getfloat("validate_upper_min", None)
+            self.validate_lower_max = config.getfloat("validate_lower_max", None)
+            self.validate_lower_min = config.getfloat("validate_lower_min", None)
+            self.validate_range_max = config.getfloat("validate_range_max", None)
+            self.validate_range_min = config.getfloat("validate_range_min", None)
+
+            if config.getboolean("perform_range_tune", False):
+                self.tuning_state = SERVO_STATE_MACHINE.TUNING_START
+            # register ADC pin
             ppins = self.printer.lookup_object('pins')
             self.feedback_pin = ppins.setup_pin('adc', feedback_pin_name)
             self.feedback_pin.get_last_value()
@@ -89,34 +107,19 @@ class ServoFanFlap:
                                self.feedback_pin)
             self.mcu = self.feedback_pin.get_mcu()
 
-        self.printer.register_event_handler('klippy:connect',
-                                            self._handle_connect)
-        # register commands
-        gcode = self.printer.lookup_object("gcode")
-        gcode.register_mux_command("FLAP_SET", "FLAP",
-                                   self.flap_name,
-                                   self.cmd_FLAP_SET,
-                                   desc=self.cmd_FLAP_SET_help)
-        gcode.register_mux_command("FLAP_AUTOTUNE", "FLAP",
-                                   self.flap_name,
-                                   self.cmd_FLAP_AUTOTUNE,
-                                   desc=self.cmd_FLAP_AUTOTUNE_help)
-        gcode.register_mux_command("SET_FAN_SPEED", "FAN",
-                                   self.flap_name,
-                                   self.cmd_SET_FAN_SPEED,
-                                   desc="")
-        gcode.register_mux_command("FLAP_DEBUG", "FLAP",
-                                   self.flap_name,
-                                   self.cmd_FLAP_DEBUG,
-                                   desc=self.cmd_FLAP_DEBUG_help)
-        
-        if self.is_print_fan:
-            gcode.register_command("M106", self.cmd_M106)
-            gcode.register_command("M107", self.cmd_M107)
+            # register commands
+            gcode.register_mux_command("FLAP_AUTOTUNE", "FLAP",
+                                        self.flap_name,
+                                        self.cmd_FLAP_AUTOTUNE,
+                                        desc=self.cmd_FLAP_AUTOTUNE_help)
+            gcode.register_mux_command("FLAP_DEBUG", "FLAP",
+                                        self.flap_name,
+                                        self.cmd_FLAP_DEBUG,
+                                        desc=self.cmd_FLAP_DEBUG_help)
 
     def _handle_connect(self):
         self.move_done.set()
-        self.tuning_state = SERVO_STATE_MACHINE.TUNING_DONE
+        self.tuning_state = SERVO_STATE_MACHINE.NOT_TUNED
 
     def cmd_FLAP_SET(self, gcmd):
         width = gcmd.get_float('WIDTH', None)
@@ -126,8 +129,21 @@ class ServoFanFlap:
         value = gcmd.get_float('VALUE')
         if value is not None:
             self.set_value_from_command(value)
-            return  
+            return
+        
+    def cmd_SET_FAN_SPEED(self, gcmd):
+        speed = gcmd.get_float('SPEED', minval=0., maxval= 255.)
+        if speed is not None:
+            if speed > 1:
+                speed = speed / 255
+            self.set_value_from_command(speed)
 
+    def cmd_M106(self, gcmd):
+        val = gcmd.get_float('S', 255., minval=0.) / 255.
+        self.set_value_from_command(val)
+
+    def cmd_M107(self, gcmd):
+        self.set_value_from_command(0.)
 
     def cmd_FLAP_AUTOTUNE(self, gcmd):
         width_changed = False
@@ -154,23 +170,10 @@ class ServoFanFlap:
 
         self.tuning_state = SERVO_STATE_MACHINE.TUNING_START
 
-    def cmd_SET_FAN_SPEED(self, gcmd):
-        speed = gcmd.get_float('SPEED', minval=0., maxval= 255.)
-        if speed is not None:
-            if speed > 1:
-                speed = speed / 255
-            self.set_value_from_command(speed)
-
     def cmd_FLAP_DEBUG(self, gcmd):
         gcmd.respond_info(f"Current ADC reading: {self.current_adc}, min pulse "
                           f"width: {self.min_pulse_width}, max pulse width: "
                           f"{self.max_pulse_width}, servo state machine: {self.tuning_state}")
-
-    def cmd_M106(self, gcmd):
-        val = gcmd.get_float('S', 255., minval=0.) / 255.
-        self.set_value_from_command(val)
-    def cmd_M107(self, gcmd):
-        self.set_value_from_command(0.)
 
     def set_value_from_command(self, value):
         toolhead = self.printer.lookup_object('toolhead')
@@ -201,7 +204,7 @@ class ServoFanFlap:
         self.last_time = print_time
         self.move_done.clear()
         self.move_timer.waketime = self.reactor.monotonic() + self.move_time
-        if not self.tuning_running and width > 0 and self.power_off_time > 0:
+        if not self.is_tuning_running() and width > 0 and self.power_off_time > 0:
             self.poweroff_timer.waketime = self.reactor.monotonic() + self.power_off_time
         else:
             self.poweroff_timer.waketime = self.reactor.NEVER
@@ -213,11 +216,12 @@ class ServoFanFlap:
     def do_move_done(self, arg):
         self.move_done.set()
         return self.reactor.NEVER
-
-    def get_status(self, eventtime):
-        return {
-            'speed': self.current_value
-        }
+    
+    def is_tuning_running(self):
+        return self.tuning_state in [SERVO_STATE_MACHINE.TUNING_START, 
+                                 SERVO_STATE_MACHINE.TUNING_UPPER,
+                                 SERVO_STATE_MACHINE.TUNING_LOWER, 
+                                 SERVO_STATE_MACHINE.TUNING_VALIDATE]
 
     def _analog_feedback_callback(self, last_read_time, last_value):
         # This callback is called periodically. I need it for servo range
@@ -226,16 +230,12 @@ class ServoFanFlap:
         # his poor life as general program loop.
         self.current_adc = last_value
 
-        if self.tuning_state in [SERVO_STATE_MACHINE.TUNING_START, 
-                                 SERVO_STATE_MACHINE.TUNING_UPPER,
-                                 SERVO_STATE_MACHINE.TUNING_LOWER, 
-                                 SERVO_STATE_MACHINE.TUNING_VALIDATE]:
+        if self.is_tuning_running():
             if not self.move_done.is_set(): # Wait for moving done
                 return
 
             err_msg = ""
             if self.tuning_state == SERVO_STATE_MACHINE.TUNING_START:
-                self.tuning_running = True
                 self.move_time = self.tuning_start_time
                 self.set_width_from_command(self.tuning_start_width)
                 self.tuning_state = SERVO_STATE_MACHINE.TUNING_UPPER
@@ -306,13 +306,16 @@ class ServoFanFlap:
                     self.tuning_state = SERVO_STATE_MACHINE.TUNING_DONE
 
             if self.tuning_state == SERVO_STATE_MACHINE.TUNING_DONE:
-                self.tuning_running = False
                 self.set_value_from_command(self.start_value)
                 return
             elif self.tuning_state == SERVO_STATE_MACHINE.TUNING_ERROR:
-                self.tuning_running = False
                 self.printer.invoke_shutdown(err_msg + HINT_SERVO_FLAP)
                 return
+            
+    def get_status(self, eventtime):
+        return {
+            'speed': self.current_value
+        }
             
 def load_config_prefix(config):
     return ServoFanFlap(config)
