@@ -74,19 +74,20 @@ class ServoFanFlap:
         self.tuning_running = False
 
         # register ADC pin
-        #ppins = self.printer.lookup_object('pins')
-        feedback_pin_name = config.get("feedback_pin")
-        #self.feedback_pin = ppins.setup_pin('adc', feedback_pin_name)
-        #self.feedback_pin.get_last_value()
-        #self.feedback_pin.setup_adc_callback(REPORT_TIME,
-        #                                     self._analog_feedback_callback)
-        #self.feedback_pin.setup_minmax(SAMPLE_TIME, SAMPLE_COUNT, minval=0.,
-        #                               maxval=1.,
-        #                               range_check_count=RANGE_CHECK_COUNT)
-        #query_adc = config.get_printer().load_object(config, 'query_adc')
-        #query_adc.register_adc(self.flap_name + ":feedback",
-        #                       self.feedback_pin)
-        #self.mcu = self.feedback_pin.get_mcu()
+        feedback_pin_name = config.get("feedback_pin", None)
+        if feedback_pin_name is not None:
+            ppins = self.printer.lookup_object('pins')
+            self.feedback_pin = ppins.setup_pin('adc', feedback_pin_name)
+            self.feedback_pin.get_last_value()
+            self.feedback_pin.setup_adc_callback(REPORT_TIME,
+                                                self._analog_feedback_callback)
+            self.feedback_pin.setup_minmax(SAMPLE_TIME, SAMPLE_COUNT, minval=0.,
+                                            maxval=1.,
+                                            range_check_count=RANGE_CHECK_COUNT)
+            query_adc = config.get_printer().load_object(config, 'query_adc')
+            query_adc.register_adc(self.flap_name + ":feedback",
+                               self.feedback_pin)
+            self.mcu = self.feedback_pin.get_mcu()
 
         self.printer.register_event_handler('klippy:connect',
                                             self._handle_connect)
@@ -169,7 +170,7 @@ class ServoFanFlap:
         val = gcmd.get_float('S', 255., minval=0.) / 255.
         self.set_value_from_command(val)
     def cmd_M107(self, gcmd):
-        self.set_value_from_command(0)
+        self.set_value_from_command(0.)
 
     def set_value_from_command(self, value):
         toolhead = self.printer.lookup_object('toolhead')

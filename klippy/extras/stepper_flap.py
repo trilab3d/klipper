@@ -76,7 +76,7 @@ class StepperFlap:
         val = gcmd.get_float('S', 255., minval=0.) / 255.
         self.set_value(val)
     def cmd_M107(self, gcmd):
-        self.set_value(0)
+        self.set_value(0.)
 
     def set_value(self, value):
         if self.invert:
