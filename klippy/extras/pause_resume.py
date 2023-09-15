@@ -10,6 +10,7 @@ class PauseResume:
         self.gcode = self.printer.lookup_object('gcode')
         self.recover_velocity = config.getfloat('recover_velocity', 50.)
         self.v_sd = None
+        self.print_interlock = None
         self.is_paused = False
         self.sd_paused = False
         self.pause_command_sent = False
@@ -32,6 +33,7 @@ class PauseResume:
                                    self._handle_resume_request)
     def handle_connect(self):
         self.v_sd = self.printer.lookup_object('virtual_sdcard', None)
+        self.print_interlock = self.printer.lookup_object('print_interlock', None)
     def _handle_cancel_request(self, web_request):
         self.gcode.run_script("CANCEL_PRINT")
     def _handle_pause_request(self, web_request):
@@ -77,6 +79,8 @@ class PauseResume:
     def cmd_RESUME(self, gcmd):
         if not self.is_paused:
             gcmd.respond_info("Print is not paused, resume aborted")
+            return
+        if self.print_interlock is not None and self.print_interlock.check_locked(True):
             return
         velocity = gcmd.get_float('VELOCITY', self.recover_velocity)
         self.gcode.run_script_from_command(

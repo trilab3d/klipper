@@ -15,9 +15,15 @@ class OpenHelper:
         self.open_pause = config.getboolean('pause_on_open', True)
         if self.open_pause:
             self.printer.load_object(config, 'pause_resume')
+            self.printer.load_object(config, 'respond')
+            self.printer.load_object(config, 'print_interlock')
+        self.print_interlock = self.printer.lookup_object('print_interlock',None)
+        self.interlock = None
+        if self.print_interlock is not None:
+            self.interlock = self.print_interlock.create_interlock("Doors are open")
         self.open_gcode = self.close_gcode = None
         gcode_macro = self.printer.load_object(config, 'gcode_macro')
-        if self.open_pause or config.get('runout_gcode', None) is not None:
+        if self.open_pause or config.get('open_gcode', None) is not None:
             self.open_gcode = gcode_macro.load_template(
                 config, 'open_gcode', '')
         if config.get('close_gcode', None) is not None:
@@ -60,6 +66,8 @@ class OpenHelper:
             logging.exception("Script running error")
         self.min_event_systime = self.reactor.monotonic() + self.event_delay
     def note_door_closed(self, is_door_closed):
+        if self.interlock is not None:
+            self.interlock.set_lock(not is_door_closed)
         if is_door_closed == self.door_closed:
             return
         self.door_closed = is_door_closed
@@ -72,7 +80,7 @@ class OpenHelper:
         # Determine "printing" status
         idle_timeout = self.printer.lookup_object("idle_timeout")
         is_printing = idle_timeout.get_status(eventtime)["state"] == "Printing"
-        # Perform filament action associated with status change (if any)
+        # Perform printer action associated with status change (if any)
         if is_door_closed:
             if not is_printing and self.close_gcode is not None:
                 # Close detected
@@ -88,7 +96,7 @@ class OpenHelper:
                 "Door Sensor %s: open event detected, Time %.2f" %
                 (self.name, eventtime))
             self.reactor.register_callback(self._open_event_handler)
-    def get_status(self, eventtime):
+    def get_status(self, eventtime=None):
         return {
             "door_closed": bool(self.door_closed),
             "enabled": bool(self.sensor_enabled)}
@@ -114,5 +122,5 @@ class DoorSensor:
     def _button_handler(self, eventtime, state):
         self.open_helper.note_door_closed(state)
 
-def load_config_prefix(config):
+def load_config(config):
     return DoorSensor(config)

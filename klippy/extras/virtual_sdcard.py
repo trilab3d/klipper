@@ -12,6 +12,9 @@ class VirtualSD:
         self.printer = config.get_printer()
         self.printer.register_event_handler("klippy:shutdown",
                                             self.handle_shutdown)
+        self.printer.register_event_handler("klippy:connect",
+                                            self.handle_connect)
+        self.print_interlock = None
         # sdcard state
         sd = config.get('path')
         self.sdcard_dirname = os.path.normpath(os.path.expanduser(sd))
@@ -54,6 +57,8 @@ class VirtualSD:
             logging.info("Virtual sdcard (%d): %s\nUpcoming (%d): %s",
                          readpos, repr(data[:readcount]),
                          self.file_position, repr(data[readcount:]))
+    def handle_connect(self):
+        self.print_interlock = self.printer.lookup_object('print_interlock', None)
     def stats(self, eventtime):
         if self.work_timer is None:
             return False, ""
@@ -110,6 +115,8 @@ class VirtualSD:
     def do_resume(self):
         if self.work_timer is not None:
             raise self.gcode.error("SD busy")
+        if self.print_interlock is not None and self.print_interlock.check_locked(True):
+            return
         self.must_pause_work = False
         self.work_timer = self.reactor.register_timer(
             self.work_handler, self.reactor.NOW)
