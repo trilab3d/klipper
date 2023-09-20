@@ -28,7 +28,7 @@ class AnalogEndstopWrapper:
         pin = config.get('sensor_pin')
         pin_params = ppins.lookup_pin(pin, can_invert=True, can_pullup=True)
         mcu = pin_params['chip']
-        self.treshold = config.getint("treshold", 0)
+        self.treshold = self.default_treshold = config.getint("treshold", 0)
         self.base_adc = 0
         self.mcu_endstop = mcu.setup_pin('analog_endstop', pin_params)
         # Wrappers
@@ -42,6 +42,9 @@ class AnalogEndstopWrapper:
         self.gcode.register_command("ANALOG_PROBE_DEBUG",
                                     self.cmd_ANALOG_PROBE_DEBUG,
                                     desc=self.cmd_ANALOG_PROBE_DEBUG_help)
+        self.gcode.register_command("ANALOG_PROBE_SET_TRESHOLD",
+                                    self.cmd_ANALOG_PROBE_SET_TRESHOLD,
+                                    desc=self.cmd_ANALOG_PROBE_SET_TRESHOLD_help)
         # multi probes state
         self.multi = 'OFF'
     def handle_mcu_identify(self):
@@ -118,6 +121,10 @@ class AnalogEndstopWrapper:
                           f"{self.mcu_endstop.query_endstop()}, ADC base value"
                           f" = {self.base_adc}, treshold={self.treshold}")
         self.sync_print_time()
+
+    cmd_ANALOG_PROBE_SET_TRESHOLD_help = "ANALOG_PROBE_SET_TRESHOLD TRESHOLD=<treshold>"
+    def cmd_ANALOG_PROBE_SET_TRESHOLD(self, gcmd):
+        self.treshold = gcmd.get_int('TRESHOLD', self.default_treshold, minval=0)
 
 def load_config(config):
     endstop = AnalogEndstopWrapper(config)
