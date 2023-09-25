@@ -208,6 +208,7 @@ class ToolHead:
             self.can_pause = False
         self.move_queue = MoveQueue(self)
         self.commanded_pos = [0., 0., 0., 0.]
+        self.move_queue_add_move_callbacks = []
         self.printer.register_event_handler("klippy:shutdown",
                                             self._handle_shutdown)
         # Velocity and acceleration control
@@ -247,6 +248,7 @@ class ToolHead:
         self.trapq_append = ffi_lib.trapq_append
         self.trapq_finalize_moves = ffi_lib.trapq_finalize_moves
         self.step_generators = []
+        self.independent_steppers = []
         # Create kinematics class
         gcode = self.printer.lookup_object('gcode')
         self.Coord = gcode.Coord
@@ -288,6 +290,8 @@ class ToolHead:
             free_time = max(fft, sg_flush_time - kin_flush_delay)
             self.trapq_finalize_moves(self.trapq, free_time)
             self.extruder.update_move_time(free_time)
+            for independent_stepper in self.independent_steppers:
+                independent_stepper.update_move_time(free_time)
             mcu_flush_time = max(fft, sg_flush_time - self.move_flush_time)
             for m in self.all_mcus:
                 m.flush_moves(mcu_flush_time)
@@ -351,10 +355,22 @@ class ToolHead:
         # Flush kinematic scan windows and step buffers
         self.force_flush_time = max(self.force_flush_time, flush_time)
         self._update_move_time(max(self.print_time, self.force_flush_time))
+        self._flush_independent_steppers()
     def _flush_lookahead(self):
         if self.special_queuing_state:
             return self.flush_step_generation()
         self.move_queue.flush()
+        self._flush_independent_steppers()
+    def _flush_independent_steppers(self):
+        need_flush = self.get_max_next_move_time_of_independent_steppers() > self.print_time
+        if need_flush:
+            for independent_stepper in self.independent_steppers:
+                independent_stepper.flush()
+    def get_max_next_move_time_of_independent_steppers(self):
+        print_time = 0
+        for independent_stepper in self.independent_steppers:
+            print_time = max(print_time, independent_stepper.next_cmd_time)
+        return print_time
     def get_last_move_time(self):
         self._flush_lookahead()
         if self.special_queuing_state:
@@ -424,6 +440,8 @@ class ToolHead:
             self.extruder.check_move(move)
         self.commanded_pos[:] = move.end_pos
         self.move_queue.add_move(move)
+        for cb in self.move_queue_add_move_callbacks:
+            cb()
         if self.print_time > self.need_check_stall:
             self._check_stall()
     def manual_move(self, coord, speed):
@@ -526,6 +544,8 @@ class ToolHead:
         return self.trapq
     def register_step_generator(self, handler):
         self.step_generators.append(handler)
+    def register_independent_stepper(self, independent_stepper):
+        self.independent_steppers.append(independent_stepper)
     def note_step_generation_scan_time(self, delay, old_delay=0.):
         self.flush_step_generation()
         cur_delay = self.kin_flush_delay
@@ -539,8 +559,11 @@ class ToolHead:
         last_move = self.move_queue.get_last()
         if last_move is None:
             callback(self.get_last_move_time())
-            return
+            return False
         last_move.timing_callbacks.append(callback)
+        return True
+    def register_move_queue_add_move_callback(self, callback):
+        self.move_queue_add_move_callbacks.append(callback)
     def note_kinematic_activity(self, kin_time):
         self.last_kin_move_time = max(self.last_kin_move_time, kin_time)
     def get_max_velocity(self):
