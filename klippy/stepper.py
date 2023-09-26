@@ -41,6 +41,7 @@ class MCU_stepper:
         self._mcu_position_offset = 0.
         self._reset_cmd_tag = self._get_position_cmd = None
         self._active_callbacks = []
+        self._inactive_callbacks = []
         ffi_main, ffi_lib = chelper.get_ffi()
         self._stepqueue = ffi_main.gc(ffi_lib.stepcompress_alloc(oid),
                                       ffi_lib.stepcompress_free)
@@ -211,21 +212,27 @@ class MCU_stepper:
         return old_tq
     def add_active_callback(self, cb):
         self._active_callbacks.append(cb)
+    def add_inactive_callback(self, cb):
+        self._inactive_callbacks.append(cb)
     def generate_steps(self, flush_time):
         # Check for activity if necessary
+        active_from_time = 0.
         if self._active_callbacks:
             sk = self._stepper_kinematics
-            ret = self._itersolve_check_active(sk, flush_time)
-            if ret:
+            active_from_time = self._itersolve_check_active(sk, flush_time)
+            if active_from_time:
                 cbs = self._active_callbacks
                 self._active_callbacks = []
                 for cb in cbs:
-                    cb(ret)
+                    cb(active_from_time)
         # Generate steps
         sk = self._stepper_kinematics
         ret = self._itersolve_generate_steps(sk, flush_time)
         if ret:
             raise error("Internal error in stepcompress")
+        if active_from_time == 0. and self._inactive_callbacks:
+            for cb in self._inactive_callbacks:
+                cb(flush_time)
     def is_active_axis(self, axis):
         ffi_main, ffi_lib = chelper.get_ffi()
         a = axis.encode()

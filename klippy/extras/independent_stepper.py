@@ -41,7 +41,13 @@ class IndependentStepper:
         self.registered_callback_for_toolhead_last_move = False
 
         self.velocity = config.getfloat('velocity', 5., above=0.)
-        self.accel = self.homing_accel = config.getfloat('accel', 0., minval=0.)
+        self.accel = config.getfloat('accel', 0., minval=0.)
+        self.disable_when_inactive = config.getboolean('disable_when_inactive', True)
+
+        if self.disable_when_inactive:
+            stepper_enable = self.printer.lookup_object('stepper_enable')
+            enable_line = stepper_enable.lookup_enable(self.stepper.get_name())
+            self.stepper.add_inactive_callback(enable_line.motor_disable)
 
         # We need to wait until toolhead is fully initialized.
         self.printer.register_event_handler("klippy:connect", self._handle_connect)
