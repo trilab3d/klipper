@@ -41,6 +41,14 @@ class SaveVariables:
             value = ast.literal_eval(value)
         except ValueError as e:
             raise gcmd.error("Unable to parse '%s' as a literal" % (value,))
+        try:
+           self.save_variable(varname, value)
+        except:
+            msg = "Unable to save variable"
+            logging.exception(msg)
+            self.loadVariables()
+            raise gcmd.error(msg)
+    def save_variable(self, varname, value):
         newvars = dict(self.allVariables)
         newvars[varname] = value
         # Write file
@@ -48,15 +56,14 @@ class SaveVariables:
         varfile.add_section('Variables')
         for name, val in sorted(newvars.items()):
             varfile.set('Variables', name, repr(val))
-        try:
-            f = open(self.filename, "w")
-            varfile.write(f)
-            f.close()
-        except:
-            msg = "Unable to save variable"
-            logging.exception(msg)
-            raise gcmd.error(msg)
+        f = open(self.filename, "w")
+        varfile.write(f)
+        f.close()
         self.loadVariables()
+    def get_variable(self, varname):
+        if varname in self.allVariables:
+            return self.allVariables[varname]
+        return None
     def get_status(self, eventtime):
         return {'variables': self.allVariables}
 

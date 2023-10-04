@@ -18,6 +18,7 @@ class OpenHelper:
             self.printer.load_object(config, 'respond')
             self.printer.load_object(config, 'print_interlock')
         self.print_interlock = self.printer.lookup_object('print_interlock',None)
+        self.save_variables = None
         self.interlock = None
         if self.print_interlock is not None:
             self.interlock = self.print_interlock.create_interlock("Doors are open")
@@ -34,19 +35,31 @@ class OpenHelper:
         # Internal state
         self.min_event_systime = self.reactor.NEVER
         self.door_closed = False
-        self.sensor_enabled = True
         # Register commands and event handlers
         self.printer.register_event_handler("klippy:ready", self._handle_ready)
-        self.gcode.register_mux_command(
-            "QUERY_DOOR_SENSOR", "SENSOR", self.name,
+        logging.info(f"Door Sensor registering connect")
+        self.printer.register_event_handler("klippy:connect", self._handle_connect)
+        self.gcode.register_command(
+            "QUERY_DOOR_SENSOR",
             self.cmd_QUERY_DOOR_SENSOR,
             desc=self.cmd_QUERY_DOOR_SENSOR_help)
-        self.gcode.register_mux_command(
-            "SET_DOOR_SENSOR", "SENSOR", self.name,
-            self.cmd_SET_DOOR_SENSOR,
+        self.gcode.register_command(
+            "SET_DOOR_SENSOR_DISABLED",
+            self.cmd_SET_DOOR_SENSOR_DISABLED,
             desc=self.cmd_SET_DOOR_SENSOR_help)
     def _handle_ready(self):
         self.min_event_systime = self.reactor.monotonic() + 2.
+    def _handle_connect(self):
+        logging.info(f"Door Sensor handle connect")
+        try:
+            self.save_variables = self.printer.lookup_object('save_variables')
+            logging.info(f"Save Variables Object is {self.save_variables}")
+            dds = self.save_variables.get_variable("disable-door-sensor")
+            if dds is None:
+                self.save_variables.save_variable("disable-door-sensor", False)
+        except Exception as e:
+            logging.error(f"Door Sensor Error {e}")
+            self.printer.invoke_shutdown(e)
     def _open_event_handler(self, eventtime):
         # Pausing from inside an event requires that the pause portion
         # of pause_resume execute immediately.
@@ -66,13 +79,17 @@ class OpenHelper:
             logging.exception("Script running error")
         self.min_event_systime = self.reactor.monotonic() + self.event_delay
     def note_door_closed(self, is_door_closed):
+        sensor_disabled = self.save_variables.get_variable("disable-door-sensor")
         if self.interlock is not None:
-            self.interlock.set_lock(not is_door_closed)
+            if sensor_disabled:
+                self.interlock.set_lock(False)
+            else:
+                self.interlock.set_lock(not is_door_closed)
         if is_door_closed == self.door_closed:
             return
         self.door_closed = is_door_closed
         eventtime = self.reactor.monotonic()
-        if eventtime < self.min_event_systime or not self.sensor_enabled:
+        if eventtime < self.min_event_systime:
             # do not process during the initialization time, duplicates,
             # during the event delay time, while an event is running, or
             # when the sensor is disabled
@@ -89,7 +106,7 @@ class OpenHelper:
                     "Door Sensor %s: close event detected, Time %.2f" %
                     (self.name, eventtime))
                 self.reactor.register_callback(self._close_event_handler)
-        elif is_printing and self.open_gcode is not None:
+        elif is_printing and self.open_gcode is not None and not sensor_disabled:
             # Open detected
             self.min_event_systime = self.reactor.NEVER
             logging.info(
@@ -97,9 +114,10 @@ class OpenHelper:
                 (self.name, eventtime))
             self.reactor.register_callback(self._open_event_handler)
     def get_status(self, eventtime=None):
+        disabled = self.save_variables.get_variable("disable-door-sensor")
         return {
-            "door_closed": bool(self.door_closed),
-            "enabled": bool(self.sensor_enabled)}
+            "door_closed": self.door_closed or disabled,
+            "enabled": not disabled}
     cmd_QUERY_DOOR_SENSOR_help = "Query the status of the Door Sensor"
     def cmd_QUERY_DOOR_SENSOR(self, gcmd):
         if self.door_closed:
@@ -108,8 +126,11 @@ class OpenHelper:
             msg = "Door Sensor %s: door opened" % (self.name)
         gcmd.respond_info(msg)
     cmd_SET_DOOR_SENSOR_help = "Sets the door sensor on/off"
-    def cmd_SET_DOOR_SENSOR(self, gcmd):
-        self.sensor_enabled = gcmd.get_int("ENABLE", 1)
+    def cmd_SET_DOOR_SENSOR_DISABLED(self, gcmd):
+        disabled = bool(gcmd.get_int("DISABLED"))
+        self.save_variables.save_variable("disable-door-sensor", disabled)
+        if disabled and self.interlock is not None:
+            self.interlock.set_lock(False)
 
 class DoorSensor:
     def __init__(self, config):
