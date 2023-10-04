@@ -279,7 +279,7 @@ class PrinterConfig:
         data = self._read_config_file(filename)
         regular_data, autosave_data = self._find_autosave_data(data)
         regular_config = self._build_config_wrapper(regular_data, filename)
-        autosave_data = self._strip_duplicates(autosave_data, regular_config)
+        #autosave_data = self._strip_duplicates(autosave_data, regular_config)
         self.autosave = self._build_config_wrapper(autosave_data, filename)
         cfg = self._build_config_wrapper(regular_data + autosave_data, filename)
         return cfg
@@ -396,7 +396,7 @@ class PrinterConfig:
             msg = "Unable to parse existing config on SAVE_CONFIG"
             logging.exception(msg)
             raise gcode.error(msg)
-        regular_data = self._strip_duplicates(regular_data, self.autosave)
+        #regular_data = self._strip_duplicates(regular_data, self.autosave)
         #self._disallow_include_conflicts(regular_data, cfgname, gcode) # this is not problem, it works as fine.
         data = regular_data.rstrip() + autosave_data
         # Determine filenames
