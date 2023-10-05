@@ -48,6 +48,7 @@ class ServoFanFlap:
         self.current_adc = 0.
         self.current_value = -1
         self.current_width = -1
+        self.last_width = 0
         self.last_time = 0.
         self.move_time = 0.2
         self.move_done = threading.Event()
@@ -195,6 +196,8 @@ class ServoFanFlap:
         self.set_width(print_time, width)
 
     def set_width(self, print_time, width):
+        if width > 0:
+            self.last_width = width
         if width == self.current_width:
             return
         print_time = max(self.last_time + SERVO_MIN_TIME, print_time)
@@ -313,8 +316,11 @@ class ServoFanFlap:
                 return
             
     def get_status(self, eventtime):
+        spd = (self.last_width - self.min_pulse_width) / (self.max_pulse_width - self.min_pulse_width)
+        if self.open_at_sp:
+            spd = 1 - spd
         return {
-            'speed': self.current_value
+            'speed': spd
         }
             
 def load_config_prefix(config):
