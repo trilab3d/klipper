@@ -623,6 +623,13 @@ stepcompress_queue_msg(struct stepcompress *sc, uint32_t *data, int len)
     return 0;
 }
 
+// Return true if stepcompress message queue is not empty and there are pending step steps in stepcompress.
+int __visible
+stepcompress_has_untransmitted_steps(struct stepcompress *sc) {
+    // When there are some pending steps, then next_step_clock is non-zero value.
+    return sc->next_step_clock != 0 || !list_empty(&sc->msg_queue);
+}
+
 // Return history of queue_step commands
 int __visible
 stepcompress_extract_old(struct stepcompress *sc, struct pull_history_steps *p
