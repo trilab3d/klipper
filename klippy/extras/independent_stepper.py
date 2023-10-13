@@ -43,14 +43,35 @@ class IndependentStepper:
         self.velocity = config.getfloat('velocity', 5., above=0.)
         self.accel = config.getfloat('accel', 0., minval=0.)
         self.disable_when_inactive = config.getboolean('disable_when_inactive', True)
+        self.disable_delay = config.getboolean('disable_delay', 2.)
+        self.last_active_time = 0.
 
         if self.disable_when_inactive:
-            stepper_enable = self.printer.lookup_object('stepper_enable')
-            enable_line = stepper_enable.lookup_enable(self.stepper.get_name())
-            self.stepper.add_inactive_callback(enable_line.motor_disable)
+            self.stepper.add_persistent_active_callback(self._handle_active)
+            self.stepper.add_persistent_inactive_callback(self._handle_inactive)
 
         # We need to wait until toolhead is fully initialized.
         self.printer.register_event_handler("klippy:connect", self._handle_connect)
+
+    def _handle_active(self, print_time):
+        self.last_active_time = print_time
+
+    def _handle_inactive(self, print_time, stepqueue):
+        if print_time < self.last_active_time + self.disable_delay:
+            # We have to wait until the disable delay elapses.
+            return
+
+        _, ffi_lib = chelper.get_ffi()
+        has_untransmitted_steps = ffi_lib.stepcompress_has_untransmitted_steps(stepqueue)
+        if has_untransmitted_steps:
+            # Stepper motor has untransmitted messages or pending steps in stepcompress.
+            # That means that the stepper will be active, so we have to wait before we
+            # disable the stepper motor.
+            return
+
+        stepper_enable = self.printer.lookup_object('stepper_enable')
+        enable_line = stepper_enable.lookup_enable(self.stepper.get_name())
+        enable_line.motor_disable(print_time)
 
     def _handle_connect(self):
         toolhead = self.printer.lookup_object('toolhead')
