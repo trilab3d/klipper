@@ -178,6 +178,9 @@ class IndependentStepper:
         if len(toolhead.move_queue.queue) == 0:
             toolhead.note_kinematic_activity(self.next_cmd_time)
             self.sync_print_time()
+            if self.disable_delay > 0:
+                toolhead.dwell(self.disable_delay + toolhead.kin_flush_delay)
+                self.enable(False)
 
     def flush(self):
         self.sync_print_time()
