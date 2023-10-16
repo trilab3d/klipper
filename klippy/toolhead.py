@@ -355,17 +355,18 @@ class ToolHead:
         # Flush kinematic scan windows and step buffers
         self.force_flush_time = max(self.force_flush_time, flush_time)
         self._update_move_time(max(self.print_time, self.force_flush_time))
-        self._flush_independent_steppers()
     def _flush_lookahead(self):
         if self.special_queuing_state:
             return self.flush_step_generation()
         self.move_queue.flush()
         self._flush_independent_steppers()
     def _flush_independent_steppers(self):
-        need_flush = self.get_max_next_move_time_of_independent_steppers() > self.print_time
-        if need_flush:
-            for independent_stepper in self.independent_steppers:
-                independent_stepper.flush()
+        independent_steppers_next_move_time = self.get_max_next_move_time_of_independent_steppers()
+        next_move_time = max(self.last_kin_move_time, independent_steppers_next_move_time)
+        flush_time = max(self.last_kin_move_time, independent_steppers_next_move_time + self.kin_flush_delay)
+        if flush_time > self.print_time:
+            self._update_move_time(flush_time)
+            self.last_kin_move_time = max(self.last_kin_move_time, next_move_time)
     def get_max_next_move_time_of_independent_steppers(self):
         print_time = 0
         for independent_stepper in self.independent_steppers:
