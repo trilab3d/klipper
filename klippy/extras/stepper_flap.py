@@ -52,6 +52,7 @@ class StepperFlap:
             self.requested_value = value
 
         if self.current_value != self.requested_value:
+            self.current_value = self.requested_value
             self.independent_stepper.move(self.requested_value, self.independent_stepper.velocity,
                                           self.independent_stepper.accel)
 
