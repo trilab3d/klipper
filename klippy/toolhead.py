@@ -366,7 +366,7 @@ class ToolHead:
         flush_time = max(self.last_kin_move_time, independent_steppers_next_move_time + self.kin_flush_delay)
         if flush_time > self.print_time:
             self._update_move_time(flush_time)
-            self.last_kin_move_time = max(self.last_kin_move_time, next_move_time)
+            self.note_kinematic_activity(next_move_time)
     def get_max_next_move_time_of_independent_steppers(self):
         print_time = 0
         for independent_stepper in self.independent_steppers:

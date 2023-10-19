@@ -49,6 +49,7 @@ class IndependentStepper:
         if self.disable_when_inactive:
             self.stepper.add_persistent_active_callback(self._handle_active)
             self.stepper.add_persistent_inactive_callback(self._handle_inactive)
+            self.disable_from_inactive_handle = False
 
         # We need to wait until toolhead is fully initialized.
         self.printer.register_event_handler("klippy:connect", self._handle_connect)
@@ -57,6 +58,9 @@ class IndependentStepper:
         self.last_active_time = print_time
 
     def _handle_inactive(self, print_time, stepqueue):
+        if not self.disable_from_inactive_handle:
+            return
+
         if print_time < self.last_active_time + self.disable_delay:
             # We have to wait until the disable delay elapses.
             return
@@ -179,8 +183,12 @@ class IndependentStepper:
             toolhead.note_kinematic_activity(self.next_cmd_time)
             self.sync_print_time()
             if self.disable_delay > 0:
+                self.disable_from_inactive_handle = False
                 toolhead.dwell(self.disable_delay + toolhead.kin_flush_delay)
                 self.enable(False)
+                self.disable_from_inactive_handle = True
+        else:
+            self.disable_from_inactive_handle = True
 
     def flush(self):
         self.sync_print_time()

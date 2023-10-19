@@ -220,7 +220,7 @@ class MCU_stepper:
     def generate_steps(self, flush_time):
         # Check for activity if necessary
         active_from_time = 0.
-        if self._active_callbacks:
+        if self._active_callbacks or self._persistent_active_callbacks:
             sk = self._stepper_kinematics
             active_from_time = self._itersolve_check_active(sk, flush_time)
             if active_from_time:
