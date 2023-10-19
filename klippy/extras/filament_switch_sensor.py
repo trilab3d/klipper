@@ -15,6 +15,11 @@ class RunoutHelper:
         self.runout_pause = config.getboolean('pause_on_runout', True)
         if self.runout_pause:
             self.printer.load_object(config, 'pause_resume')
+            self.printer.load_object(config, 'print_interlock')
+        self.print_interlock = self.printer.lookup_object('print_interlock', None)
+        self.interlock = None
+        if self.print_interlock is not None:
+            self.interlock = self.print_interlock.create_interlock("Missing filament")
         self.runout_gcode = self.insert_gcode = None
         gcode_macro = self.printer.load_object(config, 'gcode_macro')
         if self.runout_pause or config.get('runout_gcode', None) is not None:
@@ -28,9 +33,9 @@ class RunoutHelper:
         # Internal state
         self.min_event_systime = self.reactor.NEVER
         self.filament_present = False
-        self.sensor_enabled = True
         # Register commands and event handlers
         self.printer.register_event_handler("klippy:ready", self._handle_ready)
+        self.printer.register_event_handler("klippy:connect", self._handle_connect)
         self.gcode.register_mux_command(
             "QUERY_FILAMENT_SENSOR", "SENSOR", self.name,
             self.cmd_QUERY_FILAMENT_SENSOR,
@@ -41,6 +46,17 @@ class RunoutHelper:
             desc=self.cmd_SET_FILAMENT_SENSOR_help)
     def _handle_ready(self):
         self.min_event_systime = self.reactor.monotonic() + 2.
+
+    def _handle_connect(self):
+        try:
+            self.save_variables = self.printer.lookup_object('save_variables')
+            logging.info(f"Save Variables Object is {self.save_variables}")
+            dfs = self.save_variables.get_variable("disable-door-sensor")
+            if dfs is None:
+                self.save_variables.save_variable("disable-door-sensor", False)
+        except Exception as e:
+            logging.error(f"Door Sensor Error {e}")
+            self.printer.invoke_shutdown(e)
     def _runout_event_handler(self, eventtime):
         # Pausing from inside an event requires that the pause portion
         # of pause_resume execute immediately.
@@ -60,11 +76,17 @@ class RunoutHelper:
             logging.exception("Script running error")
         self.min_event_systime = self.reactor.monotonic() + self.event_delay
     def note_filament_present(self, is_filament_present):
+        sensor_disabled = self.save_variables.get_variable("disable-door-sensor")
+        if self.interlock is not None:
+            if sensor_disabled:
+                self.interlock.set_lock(False)
+            else:
+                self.interlock.set_lock(not is_filament_present)
         if is_filament_present == self.filament_present:
             return
         self.filament_present = is_filament_present
         eventtime = self.reactor.monotonic()
-        if eventtime < self.min_event_systime or not self.sensor_enabled:
+        if eventtime < self.min_event_systime or sensor_disabled:
             # do not process during the initialization time, duplicates,
             # during the event delay time, while an event is running, or
             # when the sensor is disabled
@@ -89,9 +111,11 @@ class RunoutHelper:
                 (self.name, eventtime))
             self.reactor.register_callback(self._runout_event_handler)
     def get_status(self, eventtime):
+        disabled = self.save_variables.get_variable("disable-door-sensor") \
+            if self.save_variables is not None else False
         return {
             "filament_detected": bool(self.filament_present),
-            "enabled": bool(self.sensor_enabled)}
+            "enabled": bool(not disabled)}
     cmd_QUERY_FILAMENT_SENSOR_help = "Query the status of the Filament Sensor"
     def cmd_QUERY_FILAMENT_SENSOR(self, gcmd):
         if self.filament_present:
@@ -101,7 +125,10 @@ class RunoutHelper:
         gcmd.respond_info(msg)
     cmd_SET_FILAMENT_SENSOR_help = "Sets the filament sensor on/off"
     def cmd_SET_FILAMENT_SENSOR(self, gcmd):
-        self.sensor_enabled = gcmd.get_int("ENABLE", 1)
+        sensor_enabled = gcmd.get_int("ENABLE", 1)
+        self.save_variables.save_variable("disable-filament-sensor", not sensor_enabled)
+        if not sensor_enabled and self.interlock is not None:
+            self.interlock.set_lock(False)
 
 class SwitchSensor:
     def __init__(self, config):
