@@ -51,9 +51,9 @@ class RunoutHelper:
         try:
             self.save_variables = self.printer.lookup_object('save_variables')
             logging.info(f"Save Variables Object is {self.save_variables}")
-            dfs = self.save_variables.get_variable("disable-door-sensor")
+            dfs = self.save_variables.get_variable("disable-filament-sensor")
             if dfs is None:
-                self.save_variables.save_variable("disable-door-sensor", False)
+                self.save_variables.save_variable("disable-filament-sensor", False)
         except Exception as e:
             logging.error(f"Door Sensor Error {e}")
             self.printer.invoke_shutdown(e)
@@ -76,7 +76,7 @@ class RunoutHelper:
             logging.exception("Script running error")
         self.min_event_systime = self.reactor.monotonic() + self.event_delay
     def note_filament_present(self, is_filament_present):
-        sensor_disabled = self.save_variables.get_variable("disable-door-sensor")
+        sensor_disabled = self.save_variables.get_variable("disable-filament-sensor")
         if self.interlock is not None:
             if sensor_disabled:
                 self.interlock.set_lock(False)
@@ -111,7 +111,7 @@ class RunoutHelper:
                 (self.name, eventtime))
             self.reactor.register_callback(self._runout_event_handler)
     def get_status(self, eventtime):
-        disabled = self.save_variables.get_variable("disable-door-sensor") \
+        disabled = self.save_variables.get_variable("disable-filament-sensor") \
             if self.save_variables is not None else False
         return {
             "filament_detected": bool(self.filament_present),
