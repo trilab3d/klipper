@@ -28,6 +28,10 @@ class StepperFlap:
                                    self.flap_name,
                                    self.cmd_FLAP_SET,
                                    desc="")
+        gcode.register_mux_command("FLAP_HOME", "FLAP",
+                                   self.flap_name,
+                                   self.cmd_FLAP_HOME,
+                                   desc="")
         if self.is_print_fan:
             gcode.register_command("M106", self.cmd_M106)
             gcode.register_command("M107", self.cmd_M107)
@@ -37,6 +41,10 @@ class StepperFlap:
         if val > 1:
             val = val / 255
         self.set_value(val)
+
+    def cmd_FLAP_HOME(self, gcmd):
+        self.set_value(1.5)
+        self.set_value(0)
 
     def cmd_M106(self, gcmd):
         val = gcmd.get_float('S', 255., minval=0.) / 255.
