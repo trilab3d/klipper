@@ -8,6 +8,12 @@ import sys, os, gc, optparse, logging, time, collections, importlib
 import util, reactor, queuelogger, msgproto
 import gcode, configfile, pins, mcu, toolhead, webhooks
 
+# Exception formater for Zabbix
+def my_except_hook(exctype, value, traceback):
+    logging.error(f"Uncaught Exception Handler: {exctype} - {value}")
+    sys.__excepthook__(exctype, value, traceback)
+sys.excepthook = my_except_hook
+
 message_ready = "Printer is ready"
 
 message_startup = """
