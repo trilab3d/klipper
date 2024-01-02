@@ -4,6 +4,7 @@ from . import neopixel
 import configparser
 from configfile import ConfigWrapper
 
+LED_BRIGHTNESS = 0.5
 
 class StatusLed:
     def __init__(self, config):
@@ -49,7 +50,7 @@ class StatusLed:
             color_data[1] = 255  # R
             color_data[2] = 255  # B
 
-        self.set_status_led_cmd.send([color_data])
+        self.set_status_led_cmd.send([[int(x * LED_BRIGHTNESS) for x in color_data]*3])
         return eventtime + 1
 
 

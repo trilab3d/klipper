@@ -217,7 +217,7 @@ init_status_led(void)
 {
     uint8_t pin_number = 13; //PA13 (Bank index * 32 + pin number)
     struct gpio_out pin = gpio_out_setup(pin_number, 0);
-    uint16_t data_size = 3;
+    uint16_t data_size = 3 * 3;
     status_led = alloc_chunk(sizeof(*status_led) + data_size);
     status_led->pin = pin;
     status_led->data_size = data_size;
@@ -228,6 +228,14 @@ init_status_led(void)
     status_led->data[0] = 0; //G
     status_led->data[1] = 255; //R
     status_led->data[2] = 0; //B
+
+    status_led->data[3] = 0; //G
+    status_led->data[4] = 255; //R
+    status_led->data[5] = 0; //B
+
+    status_led->data[6] = 0; //G
+    status_led->data[7] = 255; //R
+    status_led->data[8] = 0; //B
 
     //send_data(status_led); // this works on warm reset, bud on first cold reset bricks device
 
@@ -256,5 +264,13 @@ status_led_shutdown_state(void)
     status_led->data[0] = 0; //G
     status_led->data[1] = 255; //R
     status_led->data[2] = 0; //B
+
+    status_led->data[3] = 0; //G
+    status_led->data[4] = 255; //R
+    status_led->data[5] = 0; //B
+
+    status_led->data[6] = 0; //G
+    status_led->data[7] = 255; //R
+    status_led->data[8] = 0; //B
     send_data(status_led);
 }
