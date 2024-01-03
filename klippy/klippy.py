@@ -7,6 +7,7 @@
 import sys, os, gc, optparse, logging, time, collections, importlib
 import util, reactor, queuelogger, msgproto
 import gcode, configfile, pins, mcu, toolhead, webhooks
+import extras.invalidator
 
 # Exception formater for Zabbix
 def my_except_hook(exctype, value, traceback):
@@ -197,6 +198,10 @@ class Printer:
             logging.exception("MCU error during connect")
             self._set_state("%s%s" % (str(e), message_mcu_connect_error))
             util.dump_mcu_build()
+            return
+        except extras.invalidator.error as e:
+            logging.error(f"Invalidator exception {e}")
+            self._set_state("%s" % (str(e)))
             return
         except Exception as e:
             logging.exception("Unhandled exception during connect")

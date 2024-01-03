@@ -1,8 +1,5 @@
-import logging
-
-import configparser
-
-error = configparser.Error
+class error(Exception):
+    pass
 
 class ConfigConstant:
     def __init__(self, config):
