@@ -22,6 +22,7 @@ class OpenHelper:
         self.interlock = None
         if self.print_interlock is not None:
             self.interlock = self.print_interlock.create_interlock("Doors are open")
+            self.interlock.set_lock(True)
         self.open_gcode = self.close_gcode = None
         gcode_macro = self.printer.load_object(config, 'gcode_macro')
         if self.open_pause or config.get('open_gcode', None) is not None:
@@ -57,6 +58,8 @@ class OpenHelper:
             dds = self.save_variables.get_variable("disable-door-sensor")
             if dds is None:
                 self.save_variables.save_variable("disable-door-sensor", False)
+            elif dds is True:
+                self.interlock.set_lock(False)
         except Exception as e:
             logging.error(f"Door Sensor Error {e}")
             self.printer.invoke_shutdown(e)
@@ -142,6 +145,7 @@ class DoorSensor:
         self.open_helper = OpenHelper(config)
         self.get_status = self.open_helper.get_status
     def _button_handler(self, eventtime, state):
+        logging.info(f"=======================Door sensor button handler. State {state}=========================================")
         self.open_helper.note_door_closed(state)
 
 def load_config(config):
