@@ -135,6 +135,8 @@ class OpenHelper:
         self.save_variables.save_variable("disable-door-sensor", disabled)
         if disabled and self.interlock is not None:
             self.interlock.set_lock(False)
+        if not disabled and self.interlock is not None:
+            self.interlock.set_lock(not self.door_closed)
 
 class DoorSensor:
     def __init__(self, config):
