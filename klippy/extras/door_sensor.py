@@ -98,8 +98,8 @@ class OpenHelper:
             # when the sensor is disabled
             return
         # Determine "printing" status
-        idle_timeout = self.printer.lookup_object("idle_timeout")
-        is_printing = idle_timeout.get_status(eventtime)["state"] == "Printing"
+        print_stats = self.printer.lookup_object("print_stats")
+        is_printing = print_stats.get_status(eventtime)["state"] == "printing"
         # Perform printer action associated with status change (if any)
         if is_door_closed:
             if not is_printing and self.close_gcode is not None:
