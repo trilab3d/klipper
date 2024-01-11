@@ -15,8 +15,8 @@ class OpenHelper:
         self.open_pause = config.getboolean('pause_on_open', True)
         if self.open_pause:
             self.printer.load_object(config, 'pause_resume')
-            self.printer.load_object(config, 'respond')
-            self.printer.load_object(config, 'print_interlock')
+        self.printer.load_object(config, 'respond')
+        self.printer.load_object(config, 'print_interlock')
         self.print_interlock = self.printer.lookup_object('print_interlock',None)
         self.save_variables = None
         self.interlock = None
