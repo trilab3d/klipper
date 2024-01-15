@@ -37,7 +37,9 @@ class PrinterHeaterFan:
         reactor = self.printer.get_reactor()
         reactor.register_timer(self.callback, reactor.monotonic()+PIN_MIN_TIME)
     def get_status(self, eventtime):
-        return self.fan.get_status(eventtime)
+        fan_satatus = self.fan.get_status(eventtime)
+        fan_satatus["set_speed"] = self.fan_speed
+        return fan_satatus
     def callback(self, eventtime):
         speed = 0.
         for heater in self.heaters:
