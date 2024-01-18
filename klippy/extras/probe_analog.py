@@ -69,7 +69,7 @@ class AnalogEndstopWrapper:
         sum = 0
         for i in range(samples):
             sum += self.mcu_endstop.query_endstop()
-        self.base_adc = sum/samples
+        self.base_adc = int(sum/samples)
 
         if self.stow_on_each_sample:
             return
