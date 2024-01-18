@@ -5,7 +5,6 @@
 # This file may be distributed under the terms of the GNU GPLv3 license.
 import logging
 from . import probe
-import statistics
 
 # Analog "endstop" wrapper
 class AnalogEndstopWrapper:
@@ -66,19 +65,11 @@ class AnalogEndstopWrapper:
         else:
             self.next_cmd_time = print_time
     def multi_probe_begin(self):
-        filter = []
-        for i in range(1024):
-            filter.append(self.mcu_endstop.query_endstop())
-
-        quantiles = statistics.quantiles(filter,n=4)
-        self.base_adc = int(quantiles[1])
-        min_v = min(filter)
-        max_v = max(filter)
-        q1 = quantiles[0]
-        q2 = quantiles[1]
-        q3 = quantiles[2]
-        logging.info(f"ADC base value set to {self.base_adc}. min:{min_v}, "
-                     f"q1:{q1}, q2:{q2}, q3:{q3}, max:{max_v}")
+        samples = 1024
+        sum = 0
+        for i in range(samples):
+            sum += self.mcu_endstop.query_endstop()
+        self.base_adc = sum/samples
 
         if self.stow_on_each_sample:
             return
