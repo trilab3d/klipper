@@ -40,7 +40,7 @@ class StatusLed:
         if status == "Idle":
             color_data[0] = 255  # G
             color_data[1] = 255  # R
-            color_data[2] = 0  # B
+            color_data[2] = 255  # B
         elif status == "Printing":
             color_data[0] = 0    # G
             color_data[1] = 0    # R
@@ -48,7 +48,7 @@ class StatusLed:
         elif status == "Ready":
             color_data[0] = 255  # G
             color_data[1] = 255  # R
-            color_data[2] = 255  # B
+            color_data[2] = 0  # B
 
         self.set_status_led_cmd.send([[int(x * LED_BRIGHTNESS) for x in color_data]*3])
         return eventtime + 1
