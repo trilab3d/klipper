@@ -77,8 +77,6 @@ class AnalogEndstopWrapper:
     def multi_probe_end(self):
         if self.stow_on_each_sample:
             return
-        self.sync_print_time()
-        self.sync_print_time()
         self.multi = 'OFF'
     def probe_prepare(self, hmove):
         if self.multi == 'OFF' or self.multi == 'FIRST':
