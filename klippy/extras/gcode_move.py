@@ -137,10 +137,14 @@ class GCodeMove:
                     raise gcmd.error("Invalid speed in '%s'"
                                      % (gcmd.get_commandline(),))
                 self.speed = gcode_speed * self.speed_factor
+            if 'C' in params:
+                force = True
+            else:
+                force = False
         except ValueError as e:
             raise gcmd.error("Unable to parse move '%s'"
                              % (gcmd.get_commandline(),))
-        self.move_with_transform(self.last_position, self.speed)
+        self.move_with_transform(self.last_position, self.speed, force)
     # G-Code coordinate manipulation
     def cmd_G20(self, gcmd):
         # Set units to inches

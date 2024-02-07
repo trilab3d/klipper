@@ -227,9 +227,9 @@ class PrinterExtruder:
         return self.trapq
     def stats(self, eventtime):
         return self.heater.stats(eventtime)
-    def check_move(self, move):
+    def check_move(self, move, force=False):
         axis_r = move.axes_r[3]
-        if not self.heater.can_extrude:
+        if not self.heater.can_extrude and not force:
             raise self.printer.command_error(
                 "Extrude below minimum temp\n"
                 "See the 'min_extrude_temp' config option for details")
@@ -315,7 +315,7 @@ class DummyExtruder:
         self.printer = printer
     def update_move_time(self, flush_time):
         pass
-    def check_move(self, move):
+    def check_move(self, move, force=False):
         raise move.move_error("Extrude when no extruder present")
     def find_past_position(self, print_time):
         return 0.

@@ -431,14 +431,14 @@ class ToolHead:
         self.commanded_pos[:] = newpos
         self.kin.set_position(newpos, homing_axes)
         self.printer.send_event("toolhead:set_position")
-    def move(self, newpos, speed):
+    def move(self, newpos, speed, force=False):
         move = Move(self, self.commanded_pos, newpos, speed)
         if not move.move_d:
             return
         if move.is_kinematic_move:
             self.kin.check_move(move)
         if move.axes_d[3]:
-            self.extruder.check_move(move)
+            self.extruder.check_move(move, force)
         self.commanded_pos[:] = move.end_pos
         self.move_queue.add_move(move)
         for cb in self.move_queue_add_move_callbacks:
