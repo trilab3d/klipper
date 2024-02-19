@@ -126,7 +126,7 @@ class VirtualSD:
             self.current_file.close()
             self.current_file = None
             self.print_stats.note_cancel()
-        self.file_position = self.file_size = 0.
+        self.file_position = self.file_size = 0
     # G-Code commands
     def cmd_error(self, gcmd):
         raise gcmd.error("SD write not supported")
@@ -135,7 +135,7 @@ class VirtualSD:
             self.do_pause()
             self.current_file.close()
             self.current_file = None
-        self.file_position = self.file_size = 0.
+        self.file_position = self.file_size = 0
         self.print_stats.reset()
         self.printer.send_event("virtual_sdcard:reset_file")
     cmd_SDCARD_RESET_FILE_help = "Clears a loaded SD File. Stops the print "\
@@ -265,7 +265,7 @@ class VirtualSD:
             # Dispatch command
             self.cmd_from_sd = True
             line = lines.pop()
-            next_file_position = self.file_position + len(line) + 1
+            next_file_position = self.file_position + len(line.encode()) + 1
             self.next_file_position = next_file_position
             try:
                 self.gcode.run_script(line)
