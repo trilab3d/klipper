@@ -1,11 +1,40 @@
 import math, logging
 import configparser
 from configfile import ConfigWrapper
+from enum import Enum
 
 KELVIN_TO_CELSIUS = -273.15
+
+class AggregationMode(Enum):
+    AVG = "avg"
+    MAX = "max"
+
+    def __str__(self):
+        return self.value
+
+def aggregation_avg(temps, last_temps):
+    awg = 0
+    l = len(temps)
+    for i, t in enumerate(temps):
+        awg += t
+        last_temps[i] = t
+    return awg / l
+
+def aggregation_max(temps, last_temps):
+    res = -273.15
+    for i, t in enumerate(temps):
+        res = max(res, t)
+        last_temps[i] = t
+    return res
+
+aggregation_methods = {
+    AggregationMode.AVG: aggregation_avg,
+    AggregationMode.MAX: aggregation_max
+}
+
 class SensorGroup:
     cmd_SENSOR_GROUP_DEBUG_help = "Return sensor group temperatures"
-    def __init__(self, config, sensors, name, max_absolute_deviation):
+    def __init__(self, config, sensors, name, max_absolute_deviation, agregation_mode):
         self.name = name
         self.num_sensors = len(sensors)
         self.temps = [0]*self.num_sensors
@@ -14,6 +43,7 @@ class SensorGroup:
         self.last_temp = 0
         self.sensors = sensors
         self.max_absolute_deviation = max_absolute_deviation
+        self.agregation_mode = AggregationMode(agregation_mode)
         for i, s in enumerate(self.sensors):
             cb = self._callback_factory(i)
             s.setup_callback(cb)
@@ -24,7 +54,8 @@ class SensorGroup:
                                    self.cmd_SENSOR_GROUP_DEBUG,
                                    desc=self.cmd_SENSOR_GROUP_DEBUG_help)
     def cmd_SENSOR_GROUP_DEBUG(self, gcmd):
-        gcmd.respond_info(f"Last average temperature: {self.last_temp}. Last sensors temperatures: {self.last_valid_temps}")
+        gcmd.respond_info(f"Last aggregated temperature: {self.last_temp}, mode {self.agregation_mode}. "
+                          f"Last sensors temperatures: {self.last_valid_temps}")
     def _callback_factory(self, i):
         def cb(read_time, read_value):
             nonlocal self
@@ -38,19 +69,16 @@ class SensorGroup:
                 # invalidate all values
                 for i, s in enumerate(self.temps_valid):
                     self.temps_valid[i] = False
-                awg = 0
-                for i, t in enumerate(self.temps):
-                    awg += t
-                    self.last_valid_temps[i] = t
-                awg = awg / self.num_sensors
-                self.last_temp = awg
+                agg = aggregation_methods[self.agregation_mode](self.temps, self.last_valid_temps)
+                self.last_temp = agg
                 if self.max_absolute_deviation is not None:
                     for i, t in enumerate(self.temps):
-                        if abs(t-awg) > self.max_absolute_deviation:
+                        if abs(t-agg) > self.max_absolute_deviation:
                             self.printer.invoke_shutdown(f"Sensor group {self.name} sensor {i} deviated so much "
-                                                         f"from average. Avg temp: {awg}, Sensor temps: {self.temps}")
+                                                         f"from aggregation. Agg temp: {agg}, "
+                                                         f"mode: {self.agregation_mode}, Sensor temps: {self.temps}")
                 if self.temperature_callback is not None:
-                    self.temperature_callback(read_time, awg)
+                    self.temperature_callback(read_time, agg)
         return cb
     def setup_callback(self, temperature_callback):
         self.temperature_callback = temperature_callback
@@ -66,6 +94,7 @@ class SensorGroupFactory:
         pheaters = config.get_printer().load_object(config, "heaters")
         self.num_sensors = config.getint("num_sensors")
         self.max_absolute_deviation = config.getfloat("max_absolute_deviation", 20)
+        self.aggregation_mode = config.get("aggregation_mode", "avg")
         self.sensors = []
         for i in range(self.num_sensors):
             prefix = f"sensor_{i+1}_"
@@ -77,7 +106,7 @@ class SensorGroupFactory:
             self.sensors.append(pheaters.setup_sensor(sensor_config))
 
     def create(self, config):
-        return SensorGroup(config, self.sensors, self.name, self.max_absolute_deviation)
+        return SensorGroup(config, self.sensors, self.name, self.max_absolute_deviation, self.aggregation_mode)
 
 def load_config_prefix(config):
     sensor_group_factory = SensorGroupFactory(config)
