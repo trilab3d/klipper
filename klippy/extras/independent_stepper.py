@@ -81,9 +81,9 @@ class IndependentStepper:
         toolhead = self.printer.lookup_object('toolhead')
         toolhead.register_step_generator(self.stepper.generate_steps)
         toolhead.register_independent_stepper(self)
-        toolhead.register_move_queue_add_move_callback(self._handle_move_queue_added_move)
+        toolhead.register_lookahead_add_move_callback(self._handle_lookahead_added_move)
 
-    def _handle_move_queue_added_move(self):
+    def _handle_lookahead_added_move(self):
         self.registered_callback_for_toolhead_last_move = False
 
     def _handle_lookahead_processed_move(self, print_time):
@@ -100,8 +100,8 @@ class IndependentStepper:
         if self.move_queue.empty():
             self.registered_callback_for_toolhead_last_move = False
 
-    def update_move_time(self, flush_time):
-        self.trapq_finalize_moves(self.trapq, flush_time)
+    def update_move_time(self, flush_time, clear_history_time):
+        self.trapq_finalize_moves(self.trapq, flush_time, clear_history_time)
 
     def sync_print_time(self):
         toolhead = self.printer.lookup_object('toolhead')
@@ -128,7 +128,7 @@ class IndependentStepper:
         toolhead.dwell(DISABLE_STALL_TIME)
 
     def set_position(self, new_pos):
-        # Fow now setting position needs to flush all toolhead.move_queue, all trapq, and generated steps.
+        # Fow now setting position needs to flush all toolhead.lookahead, all trapq, and generated steps.
         # So this led to the printer could stop printing for a short amount of time.
         # Probably can be implemented without stopping if it is needed, but all attempts lead to crashing
         # Klipper for unknown reasons.
@@ -148,8 +148,8 @@ class IndependentStepper:
         if move.total_t <= 0.:
             return
 
-        if len(toolhead.move_queue.queue) == 0:
-            # When the toolhead.move_queue is empty, put move into trapq imminently.
+        if len(toolhead.lookahead.queue) == 0:
+            # When the toolhead.lookahead is empty, put move into trapq imminently.
             if not self.move_queue.empty():
                 logging.error("Move queue of independent stepper: %s isn't empty.", self.stepper.get_name())
 
@@ -179,8 +179,8 @@ class IndependentStepper:
                           move.axis_r_x, 0., 0., 0., move.cruise_v, move.accel)
         self.next_cmd_time = print_time + move.total_t
 
-        if len(toolhead.move_queue.queue) == 0:
-            toolhead.note_kinematic_activity(self.next_cmd_time)
+        if len(toolhead.lookahead.queue) == 0:
+            toolhead.note_mcu_movequeue_activity(self.next_cmd_time)
             self.sync_print_time()
             if self.disable_delay > 0:
                 self.disable_from_inactive_handle = False
