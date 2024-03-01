@@ -4,8 +4,6 @@ from . import neopixel
 import configparser
 from configfile import ConfigWrapper
 
-LED_BRIGHTNESS = 0.5
-
 class StatusLed:
     def __init__(self, config):
         self.printer = config.get_printer()
@@ -16,6 +14,7 @@ class StatusLed:
         self.toolhead = None
         self.idle_timeout = None
         self.set_status_led_cmd = None
+        self.brightness = config.getfloat('brightness', 0.5, minval=0, maxval=1)
         self.printer.register_event_handler('klippy:connect', self._handle_connect)
         self.reactor = self.printer.get_reactor()
         self.update_timer = self.reactor.register_timer(self.do_update_value)
@@ -50,7 +49,7 @@ class StatusLed:
             color_data[1] = 255  # R
             color_data[2] = 0  # B
 
-        self.set_status_led_cmd.send([[int(x * LED_BRIGHTNESS) for x in color_data]*3])
+        self.set_status_led_cmd.send([[int(x * self.brightness) for x in color_data]*3])
         return eventtime + 1
 
 
