@@ -18,8 +18,9 @@ class MCU_scaled_adc:
         qname = main.name + ":" + pin_params['pin']
         query_adc.register_adc(qname, self._mcu_adc)
         self._callback = None
-        self.setup_minmax = self._mcu_adc.setup_minmax
+        #self.setup_minmax = self._mcu_adc.setup_minmax
         self.get_mcu = self._mcu_adc.get_mcu
+        self.adc_range_guess = (0.08625173260630817, 0.9871760397468874)
     def _handle_callback(self, read_time, read_value):
         max_adc = self._main.last_vref[1]
         min_adc = self._main.last_vssa[1]
@@ -31,6 +32,12 @@ class MCU_scaled_adc:
         self._mcu_adc.setup_adc_callback(report_time, self._handle_callback)
     def get_last_value(self):
         return self._last_state
+
+    def setup_minmax(self, sample_time, sample_count, minval=0., maxval=1., range_check_count=0):
+        new_min = (minval * (self.adc_range_guess[1] - self.adc_range_guess[0])) + self.adc_range_guess[0]
+        new_max = (maxval * (self.adc_range_guess[1] - self.adc_range_guess[0])) + self.adc_range_guess[0]
+        logging.info(f"setup minmax ADC Scaled. min: {new_min}, max: {new_max}, minval: {minval}, maxval: {maxval}")
+        self._mcu_adc.setup_minmax(sample_time, sample_count, new_min, new_max, range_check_count)
 
 class PrinterADCScaled:
     def __init__(self, config):
