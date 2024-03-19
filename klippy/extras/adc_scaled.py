@@ -36,7 +36,6 @@ class MCU_scaled_adc:
     def setup_minmax(self, sample_time, sample_count, minval=0., maxval=1., range_check_count=0):
         new_min = (minval * (self.adc_range_guess[1] - self.adc_range_guess[0])) + self.adc_range_guess[0]
         new_max = (maxval * (self.adc_range_guess[1] - self.adc_range_guess[0])) + self.adc_range_guess[0]
-        logging.info(f"setup minmax ADC Scaled. min: {new_min}, max: {new_max}, minval: {minval}, maxval: {maxval}")
         self._mcu_adc.setup_minmax(sample_time, sample_count, new_min, new_max, range_check_count)
 
 class PrinterADCScaled:
