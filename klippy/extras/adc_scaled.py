@@ -34,14 +34,16 @@ class MCU_scaled_adc:
         return self._last_state
 
     def setup_minmax(self, sample_time, sample_count, minval=0., maxval=1., range_check_count=0):
-        new_min = (minval * (self.adc_range_guess[1] - self.adc_range_guess[0])) + self.adc_range_guess[0]
-        new_max = (maxval * (self.adc_range_guess[1] - self.adc_range_guess[0])) + self.adc_range_guess[0]
+        new_min = (minval * (self._main.vref_initial_guess - self._main.vssa_initial_guess)) + self._main.vssa_initial_guess
+        new_max = (maxval * (self._main.vref_initial_guess - self._main.vssa_initial_guess)) + self._main.vssa_initial_guess
         self._mcu_adc.setup_minmax(sample_time, sample_count, new_min, new_max, range_check_count)
 
 class PrinterADCScaled:
     def __init__(self, config):
         self.printer = config.get_printer()
         self.name = config.get_name().split()[1]
+        self.vref_initial_guess = config.getfloat("vref_initial_guess", 0.9871132430936509)
+        self.vssa_initial_guess = config.getfloat("vssa_initial_guess", 0.0862477559426571)
         self.last_vref = (0., 0.)
         self.last_vssa = (0., 0.)
         # Configure vref and vssa pins
