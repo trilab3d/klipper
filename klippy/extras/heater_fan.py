@@ -17,6 +17,7 @@ class PrinterHeaterFan:
         self.printer.register_event_handler("klippy:ready", self.handle_ready)
         self.heater_names = config.getlist("heater", ("extruder",))
         self.heater_temp = config.getfloat("heater_temp", 50.0)
+        self.min_settable_value = config.getfloat("min_settable_value", 0)
         self.heaters = []
         self.fan = fan.Fan(config, default_shutdown_speed=1.)
         self.fan_speed = config.getfloat("fan_speed", 1., minval=0., maxval=1.)
@@ -30,6 +31,8 @@ class PrinterHeaterFan:
     def cmd_HEATER_FAN_SET_SPEED(self, gcmd):
         speed = gcmd.get_float('SPEED', None, minval=0., maxval=255.)
         if speed is not None:
+            if speed < self.min_settable_value:
+                speed = self.min_settable_value
             self.fan_speed = speed
     def handle_ready(self):
         pheaters = self.printer.lookup_object('heaters')
