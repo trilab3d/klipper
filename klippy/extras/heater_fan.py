@@ -18,6 +18,7 @@ class PrinterHeaterFan:
         self.heater_names = config.getlist("heater", ("extruder",))
         self.heater_temp = config.getfloat("heater_temp", 50.0)
         self.min_settable_value = config.getfloat("min_settable_value", 0)
+        self.is_print_fan = config.getboolean("is_print_fan", False)
         self.heaters = []
         self.fan = fan.Fan(config, default_shutdown_speed=1.)
         self.fan_speed = config.getfloat("fan_speed", 1., minval=0., maxval=1.)
@@ -28,12 +29,21 @@ class PrinterHeaterFan:
                                    self.fan_name,
                                    self.cmd_HEATER_FAN_SET_SPEED,
                                    desc=self.cmd_HEATER_FAN_SET_SPEED_help)
+        if self.is_print_fan:
+            gcode.register_command("M106",
+                                   self.cmd_M106,
+                                   desc=self.cmd_HEATER_FAN_SET_SPEED_help)
     def cmd_HEATER_FAN_SET_SPEED(self, gcmd):
-        speed = gcmd.get_float('SPEED', None, minval=0., maxval=255.)
+        speed = gcmd.get_float('SPEED', None, minval=0., maxval=1.)
         if speed is not None:
             if speed < self.min_settable_value:
                 speed = self.min_settable_value
             self.fan_speed = speed
+
+    def cmd_M106(self, gcmd):
+        val = gcmd.get_float('S', 255., minval=0.) / 255.
+        self.fan_speed = (val * (1 - self.min_settable_value)) + self.min_settable_value
+
     def handle_ready(self):
         pheaters = self.printer.lookup_object('heaters')
         self.heaters = [pheaters.lookup_heater(n) for n in self.heater_names]
