@@ -32,6 +32,7 @@ class PrusaState:
         self.printer.register_event_handler("virtual_sdcard:resume", self.handle_sd_resume)
         self.printer.register_event_handler("virtual_sdcard:cancel", self.handle_sd_cancel)
         self.printer.register_event_handler("virtual_sdcard:finished", self.handle_sd_finished)
+        printer.register_event_handler("klippy:shutdown", self._handle_shutdown)
         gcode = self.printer.lookup_object('gcode')
         gcode.register_command("SET_READY", self.cmd_SET_READY, desc="Sets printer ready to new job")
 
@@ -53,10 +54,13 @@ class PrusaState:
         if not self.is_printing:
             self.state = ConnectState.BUSY
 
-    def handle_pause(self, *args, **kvargs):
+    def handle_pause(self, reason, *args, **kvargs):
         self.is_printing = False
         self.is_paused = True
-        self.state = ConnectState.PAUSED
+        if reason is None:
+            self.state = ConnectState.PAUSED
+        else:
+            self.state = ConnectState.ATTENTION
 
     def handle_resume(self, *args, **kvargs):
         self.handle_sd_resume()
@@ -77,6 +81,12 @@ class PrusaState:
         self.is_ready = False
         self.is_paused = False
         self.state = ConnectState.FINISHED
+
+    def handle_shutdown(self, *args, **kvargs):
+        self.is_printing = False
+        self.is_ready = False
+        self.is_paused = False
+        self.state = ConnectState.ERROR
 
     def cmd_SET_READY(self, gcmd):
         if self.state in [ConnectState.IDLE, ConnectState.FINISHED, ConnectState.STOPPED]:

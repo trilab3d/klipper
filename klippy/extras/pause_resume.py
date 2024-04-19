@@ -14,6 +14,7 @@ class PauseResume:
         self.is_paused = False
         self.sd_paused = False
         self.pause_command_sent = False
+        self.pause_reason = None
         self.printer.register_event_handler("klippy:connect",
                                             self.handle_connect)
         self.gcode.register_command("PAUSE", self.cmd_PAUSE,
@@ -42,15 +43,17 @@ class PauseResume:
         self.gcode.run_script("RESUME")
     def get_status(self, eventtime):
         return {
-            'is_paused': self.is_paused
+            'is_paused': self.is_paused,
+            'pause_reason': self.pause_reason
         }
     def is_sd_active(self):
         return self.v_sd is not None and self.v_sd.is_active()
-    def send_pause_command(self):
+    def send_pause_command(self, reason=None):
         # This sends the appropriate pause command from an event.  Note
         # the difference between pause_command_sent and is_paused, the
         # module isn't officially paused until the PAUSE gcode executes.
         if not self.pause_command_sent:
+            self.pause_reason = reason
             if self.is_sd_active():
                 # Printing from virtual sd, run pause command
                 self.sd_paused = True
@@ -59,15 +62,20 @@ class PauseResume:
                 self.sd_paused = False
                 self.gcode.respond_info("action:paused")
             self.pause_command_sent = True
+            self.printer.send_event("pause_resume:pause", reason)
     cmd_PAUSE_help = ("Pauses the current print")
     def cmd_PAUSE(self, gcmd):
+        reason = gcmd.get("REASON", None)
         if self.is_paused:
-            gcmd.respond_info("Print already paused")
+            if self.pause_reason == reason:
+                gcmd.respond_info("Print already paused")
+            else:
+                self.printer.send_event("pause_resume:pause", reason)
+                self.pause_reason = reason
             return
-        self.send_pause_command()
+        self.send_pause_command(reason)
         self.gcode.run_script_from_command("SAVE_GCODE_STATE NAME=PAUSE_STATE")
         self.is_paused = True
-        self.printer.send_event("pause_resume:pause")
     def send_resume_command(self):
         if self.sd_paused:
             # Printing from virtual sd, run pause command
@@ -76,6 +84,8 @@ class PauseResume:
         else:
             self.gcode.respond_info("action:resumed")
         self.pause_command_sent = False
+        self.pause_reason = None
+        self.printer.send_event("pause_resume:resume")
     cmd_RESUME_help = ("Resumes the print from a pause")
     def cmd_RESUME(self, gcmd):
         if not self.is_paused:
@@ -89,7 +99,6 @@ class PauseResume:
             % (velocity))
         self.send_resume_command()
         self.is_paused = False
-        self.printer.send_event("pause_resume:resume")
     cmd_CLEAR_PAUSE_help = (
         "Clears the current paused state without resuming the print")
     def cmd_CLEAR_PAUSE(self, gcmd):

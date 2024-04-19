@@ -115,12 +115,13 @@ class VirtualSD:
     def do_resume(self):
         if self.work_timer is not None:
             raise self.gcode.error("SD busy")
-        if self.print_interlock is not None and self.print_interlock.check_locked(True):
-            return
         self.must_pause_work = False
         self.work_timer = self.reactor.register_timer(
             self.work_handler, self.reactor.NOW)
         self.printer.send_event("virtual_sdcard:resume")
+        if self.print_interlock is not None and self.print_interlock.check_locked(True):
+            pause_resume = self.printer.lookup_object('pause_resume')
+            pause_resume.send_pause_command("interlock")
     def do_cancel(self):
         if self.current_file is not None:
             self.do_pause()
