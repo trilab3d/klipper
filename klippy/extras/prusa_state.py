@@ -32,7 +32,7 @@ class PrusaState:
         self.printer.register_event_handler("virtual_sdcard:resume", self.handle_sd_resume)
         self.printer.register_event_handler("virtual_sdcard:cancel", self.handle_sd_cancel)
         self.printer.register_event_handler("virtual_sdcard:finished", self.handle_sd_finished)
-        printer.register_event_handler("klippy:shutdown", self._handle_shutdown)
+        self.printer.register_event_handler("klippy:shutdown", self._handle_shutdown)
         gcode = self.printer.lookup_object('gcode')
         gcode.register_command("SET_READY", self.cmd_SET_READY, desc="Sets printer ready to new job")
 
