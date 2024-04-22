@@ -40,7 +40,7 @@ class PrusaState:
        self.handle_ready()
 
     def handle_ready(self, *args, **kvargs):
-        if self.state in [ConnectState.STOPPED, ConnectState.FINISHED]:
+        if self.state in [ConnectState.STOPPED, ConnectState.FINISHED, ConnectState.ATTENTION]:
             return
         if self.is_paused:
             self.state = ConnectState.PAUSED
@@ -51,8 +51,9 @@ class PrusaState:
 
     # Not actually printing, just busy
     def handle_printing(self, *args, **kvargs):
-        if not self.is_printing:
-            self.state = ConnectState.BUSY
+        if self.state in [ConnectState.PRINTING, ConnectState.ATTENTION]:
+            return
+        self.state = ConnectState.BUSY
 
     def handle_pause(self, reason, *args, **kvargs):
         self.is_printing = False

@@ -63,7 +63,7 @@ class RunoutHelper:
         pause_prefix = ""
         if self.runout_pause:
             pause_resume = self.printer.lookup_object('pause_resume')
-            pause_resume.send_pause_command("filament_sensor")
+            pause_resume.do_pause("filament_sensor")
             pause_prefix = "PAUSE\n"
             self.printer.get_reactor().pause(eventtime + self.pause_delay)
         self._exec_gcode(pause_prefix, self.runout_gcode)

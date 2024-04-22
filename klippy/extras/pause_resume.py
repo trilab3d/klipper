@@ -19,6 +19,8 @@ class PauseResume:
                                             self.handle_connect)
         self.gcode.register_command("PAUSE", self.cmd_PAUSE,
                                     desc=self.cmd_PAUSE_help)
+        self.gcode.register_command("ATTENTION", self.cmd_ATTENTION,
+                                    desc=self.cmd_PAUSE_help)
         self.gcode.register_command("RESUME", self.cmd_RESUME,
                                     desc=self.cmd_RESUME_help)
         self.gcode.register_command("CLEAR_PAUSE", self.cmd_CLEAR_PAUSE,
@@ -64,8 +66,24 @@ class PauseResume:
             self.pause_command_sent = True
             self.printer.send_event("pause_resume:pause", reason)
     cmd_PAUSE_help = ("Pauses the current print")
+    def do_pause(self, reason):
+        if self.is_paused:
+            if self.pause_reason != reason:
+                self.printer.send_event("pause_resume:pause", reason)
+                self.pause_reason = reason
+            return
+        self.send_pause_command(reason)
+        self.gcode.run_script_from_command("SAVE_GCODE_STATE NAME=PAUSE_STATE")
+        self.is_paused = True
     def cmd_PAUSE(self, gcmd):
-        reason = gcmd.get("REASON", None)
+        if self.is_paused:
+            gcmd.respond_info("Print already paused")
+            return
+        self.send_pause_command()
+        self.gcode.run_script_from_command("SAVE_GCODE_STATE NAME=PAUSE_STATE")
+        self.is_paused = True
+    def cmd_ATTENTION(self, gcmd):
+        reason = gcmd.get("REASON")
         if self.is_paused:
             if self.pause_reason == reason:
                 gcmd.respond_info("Print already paused")
@@ -87,6 +105,11 @@ class PauseResume:
         self.pause_reason = None
         self.printer.send_event("pause_resume:resume")
     cmd_RESUME_help = ("Resumes the print from a pause")
+    def do_resume(self):
+        self.gcode.run_script_from_command(
+            "RESTORE_GCODE_STATE NAME=PAUSE_STATE MOVE=1")
+        self.send_resume_command()
+        self.is_paused = False
     def cmd_RESUME(self, gcmd):
         if not self.is_paused:
             gcmd.respond_info("Print is not paused, resume aborted")

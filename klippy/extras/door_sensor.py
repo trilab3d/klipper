@@ -69,7 +69,7 @@ class OpenHelper:
         pause_prefix = ""
         if self.open_pause:
             pause_resume = self.printer.lookup_object('pause_resume')
-            pause_resume.send_pause_command("door_sensor")
+            pause_resume.do_pause("door_sensor")
             pause_prefix = "PAUSE\n"
             self.printer.get_reactor().pause(eventtime + self.pause_delay)
         self._exec_gcode(pause_prefix, self.open_gcode)
