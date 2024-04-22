@@ -121,7 +121,7 @@ class VirtualSD:
         self.printer.send_event("virtual_sdcard:resume")
         if self.print_interlock is not None and self.print_interlock.check_locked(True):
             pause_resume = self.printer.lookup_object('pause_resume')
-            pause_resume.send_pause_command("interlock")
+            pause_resume.do_pause("interlock")
     def do_cancel(self):
         if self.current_file is not None:
             self.do_pause()
