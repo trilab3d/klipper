@@ -64,6 +64,7 @@ class Printer:
         self.reactor.register_callback(self._connect)
         self.state_message = message_startup
         self.in_shutdown_state = False
+        self.in_cancelling_state = False
         self.run_result = None
         self.event_handlers = {}
         self.objects = collections.OrderedDict()

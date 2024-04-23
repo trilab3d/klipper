@@ -119,6 +119,7 @@ class VirtualSD:
         self.work_timer = self.reactor.register_timer(
             self.work_handler, self.reactor.NOW)
         self.printer.send_event("virtual_sdcard:resume")
+        self.printer.in_cancelling_state = False
         if self.print_interlock is not None and self.print_interlock.check_locked(True):
             pause_resume = self.printer.lookup_object('pause_resume')
             pause_resume.do_pause("interlock")
@@ -129,6 +130,7 @@ class VirtualSD:
             self.current_file = None
             self.print_stats.note_cancel()
             self.printer.send_event("virtual_sdcard:cancel")
+            self.printer.in_cancelling_state = False
         self.file_position = self.file_size = 0
     # G-Code commands
     def cmd_error(self, gcmd):
