@@ -295,9 +295,8 @@ class TMCCommandHelper:
     def cmd_SET_TMC_CURRENT(self, gcmd):
         ch = self.current_helper
         prev_cur, prev_hold_cur, req_hold_cur, max_cur = ch.get_current()
-        run_current = gcmd.get_float('CURRENT', None, minval=0., maxval=max_cur)
-        hold_current = gcmd.get_float('HOLDCURRENT', None,
-                                      above=0., maxval=max_cur)
+        run_current = gcmd.get_float('CURRENT', None, maxval=max_cur)
+        hold_current = gcmd.get_float('HOLDCURRENT', None, maxval=max_cur)
         if run_current is not None or hold_current is not None:
             if run_current is None:
                 run_current = prev_cur

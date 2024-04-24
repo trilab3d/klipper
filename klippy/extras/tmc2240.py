@@ -275,8 +275,8 @@ class TMC2240CurrentHelper:
         self.Rref = config.getfloat('rref', 12000.,
                                     minval=12000., maxval=60000.)
         max_cur = self._get_ifs_rms(3)
-        run_current = config.getfloat('run_current', above=0., maxval=max_cur)
-        hold_current = config.getfloat('hold_current', max_cur,
+        self.default_run_current = run_current = config.getfloat('run_current', above=0., maxval=max_cur)
+        self.default_hold_current = hold_current = config.getfloat('hold_current', max_cur,
                                        above=0., maxval=max_cur)
         self.req_hold_current = hold_current
         current_range = self._calc_current_range(run_current)
@@ -326,6 +326,10 @@ class TMC2240CurrentHelper:
         hold_current = self._calc_current_from_field("ihold")
         return (run_current, hold_current, self.req_hold_current, ifs_rms)
     def set_current(self, run_current, hold_current, print_time):
+        if run_current < 0:
+            run_current = self.default_run_current
+        if hold_current < 0:
+            hold_current = self.default_hold_current
         self.req_hold_current = hold_current
         gscaler, irun, ihold = self._calc_current(run_current, hold_current)
         val = self.fields.set_field("globalscaler", gscaler)

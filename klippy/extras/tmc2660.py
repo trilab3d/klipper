@@ -118,7 +118,7 @@ class TMC2660CurrentHelper:
         self.name = config.get_name().split()[-1]
         self.mcu_tmc = mcu_tmc
         self.fields = mcu_tmc.get_fields()
-        self.current = config.getfloat('run_current', minval=0.1,
+        self.default_run_current = self.current = config.getfloat('run_current', minval=0.1,
                                        maxval=MAX_CURRENT)
         self.sense_resistor = config.getfloat('sense_resistor')
         vsense, cs = self._calc_current(self.current)
@@ -180,6 +180,8 @@ class TMC2660CurrentHelper:
         return self.current, None, None, MAX_CURRENT
 
     def set_current(self, run_current, hold_current, print_time):
+        if run_current < 0:
+            run_current = self.default_run_current
         self.current = run_current
         self._update_current(run_current, print_time)
 

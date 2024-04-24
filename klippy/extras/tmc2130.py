@@ -124,9 +124,9 @@ class TMCCurrentHelper:
         self.name = config.get_name().split()[-1]
         self.mcu_tmc = mcu_tmc
         self.fields = mcu_tmc.get_fields()
-        run_current = config.getfloat('run_current',
+        self.default_run_current = run_current = config.getfloat('run_current',
                                       above=0., maxval=MAX_CURRENT)
-        hold_current = config.getfloat('hold_current', MAX_CURRENT,
+        self.default_hold_current = hold_current = config.getfloat('hold_current', MAX_CURRENT,
                                        above=0., maxval=MAX_CURRENT)
         self.req_hold_current = hold_current
         self.sense_resistor = config.getfloat('sense_resistor', 0.110, above=0.)
@@ -168,6 +168,10 @@ class TMCCurrentHelper:
         hold_current = self._calc_current_from_bits(ihold, vsense)
         return run_current, hold_current, self.req_hold_current, MAX_CURRENT
     def set_current(self, run_current, hold_current, print_time):
+        if run_current < 0:
+            run_current = self.default_run_current
+        if hold_current < 0:
+            hold_current = self.default_hold_current
         self.req_hold_current = hold_current
         vsense, irun, ihold = self._calc_current(run_current, hold_current)
         if vsense != self.fields.get_field("vsense"):
