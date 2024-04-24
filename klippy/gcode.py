@@ -226,6 +226,7 @@ class GCodeDispatch:
         self._process_commands(script.split('\n'), need_ack=False)
     def run_script(self, script):
         if script.startswith("CANCEL_PRINT"):
+        if script.startswith("CANCEL_PRINT") or script.startswith("PAUSE"):
             self.printer.in_cancelling_state = True
         with self.mutex:
             self._process_commands(script.split('\n'), need_ack=False)
