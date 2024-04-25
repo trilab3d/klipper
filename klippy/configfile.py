@@ -422,5 +422,7 @@ class PrinterConfig:
             msg = "Unable to write config file during SAVE_CONFIG"
             logging.exception(msg)
             raise gcode.error(msg)
-        # Request a restart
-        gcode.request_restart('restart')
+
+        if(gcmd.get_int('RESTART', 1)):
+            # Request a restart
+            gcode.request_restart('restart')
