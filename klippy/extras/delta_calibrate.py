@@ -213,6 +213,12 @@ class DeltaCalibrate:
             new_dist = math.sqrt((x1-x2)**2 + (y1-y2)**2 + (z1-z2)**2)
             logging.info("distance orig: %.6f new: %.6f goal: %.6f",
                          orig_dist, new_dist, dist)
+
+        # live update kinematics
+        toolhead = self.printer.lookup_object('toolhead')
+        kin = toolhead.get_kinematics()
+        kin.reinit(toolhead, kin.max_z_velocity, kin.max_z_accel, new_delta_params.radius, kin.print_radius, new_delta_params.arms, new_delta_params.angles, kin.min_z, new_delta_params.endstops)
+
         # Store results for SAVE_CONFIG
         self.save_state(probe_positions, distances, new_delta_params)
         self.gcode.respond_info(
