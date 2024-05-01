@@ -27,6 +27,7 @@ class GCodeMove:
             'G1', 'G20', 'G21',
             'M82', 'M83', 'G90', 'G91', 'G92', 'M220', 'M221',
             'SET_GCODE_OFFSET', 'SAVE_GCODE_STATE', 'RESTORE_GCODE_STATE',
+            'SET_MATERIAL_OFFSET'
         ]
         for cmd in handlers:
             func = getattr(self, 'cmd_' + cmd)
@@ -49,6 +50,7 @@ class GCodeMove:
         self.saved_states = {}
         self.move_transform = self.move_with_transform = None
         self.position_with_transform = (lambda: [0., 0., 0., 0.])
+        self.material_offset = 0.
     def _handle_ready(self):
         self.is_printer_ready = True
         if self.move_transform is None:
@@ -210,6 +212,19 @@ class GCodeMove:
             for pos, delta in enumerate(move_delta):
                 self.last_position[pos] += delta
             self.move_with_transform(self.last_position, speed)
+    cmd_SET_MATERIAL_OFFSET_help = "Set a material offset to g-code positions"
+    def cmd_SET_MATERIAL_OFFSET(self, gcmd):
+        offset = gcmd.get_float('VALUE', None)
+        if offset is None:
+            raise gcmd.error("Parameter VALUE is not specified")
+        # Calculate material offset delta
+        offset_delta = offset - self.material_offset
+        # Update saved material offset
+        self.material_offset = offset
+        gcode = self.printer.lookup_object('gcode')
+        gcmd_set_offset = gcode.create_gcode_command("SET_GCODE_OFFSET", 
+            "SET_GCODE_OFFSET", {"Z_ADJUST": offset_delta}) 
+        self.cmd_SET_GCODE_OFFSET(gcmd_set_offset)
     cmd_SAVE_GCODE_STATE_help = "Save G-Code coordinate state"
     def cmd_SAVE_GCODE_STATE(self, gcmd):
         state_name = gcmd.get('NAME', 'default')
