@@ -618,6 +618,14 @@ class BedMeshCalibrate:
         new_y_probe_count = int(
         math.ceil(self.mesh_config["y_count"] * ratio[1]))
 
+        if self.radius is not None:
+            # If the number is even, add 1 to get the nearest higher odd number
+            # This value must be an odd number, as it is required that the center of the mesh is probed
+            if new_x_probe_count % 2 == 0:
+                new_x_probe_count += 1
+            if new_y_probe_count % 2 == 0:
+                new_y_probe_count += 1
+
         # There is one case, where we may have to adjust the probe counts:
         # axis0 < 4 and axis1 > 6 (see _verify_algorithm).
         min_num_of_probes = 3
