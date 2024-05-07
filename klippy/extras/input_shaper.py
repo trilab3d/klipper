@@ -100,6 +100,12 @@ class InputShaper:
         gcode.register_command("SET_INPUT_SHAPER",
                                self.cmd_SET_INPUT_SHAPER,
                                desc=self.cmd_SET_INPUT_SHAPER_help)
+        gcode.register_command("ENABLE_SHAPING",
+                               self.cmd_ENABLE_SHAPING,
+                               desc="Enable input shaper")
+        gcode.register_command("DISABLE_SHAPING",
+                               self.cmd_DISABLE_SHAPING,
+                               desc="Disable input shaping")
     def get_shapers(self):
         return self.shapers
     def connect(self):
@@ -165,6 +171,10 @@ class InputShaper:
             self._update_input_shaping()
         for shaper in self.shapers:
             shaper.report(gcmd)
+    def cmd_ENABLE_SHAPING(self, gcmd):
+        self.enable_shaping()
+    def cmd_DISABLE_SHAPING(self, gcmd):
+        self.disable_shaping()
 
 def load_config(config):
     return InputShaper(config)
