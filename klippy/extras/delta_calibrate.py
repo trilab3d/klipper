@@ -216,8 +216,9 @@ class DeltaCalibrate:
 
         # live update kinematics
         toolhead = self.printer.lookup_object('toolhead')
+        toolhead.dwell(0.100)
         kin = toolhead.get_kinematics()
-        kin.reinit(toolhead, kin.max_z_velocity, kin.max_z_accel, new_delta_params.radius, kin.print_radius, new_delta_params.arms, new_delta_params.angles, kin.min_z, new_delta_params.endstops)
+        kin.reinit(new_delta_params.radius, new_delta_params.arms, new_delta_params.angles, new_delta_params.endstops)
 
         # Store results for SAVE_CONFIG
         self.save_state(probe_positions, distances, new_delta_params)

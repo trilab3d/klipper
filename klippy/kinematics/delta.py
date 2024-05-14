@@ -27,44 +27,26 @@ class DeltaKinematics:
                                                     self._motor_off)
         # Setup max velocity
         self.max_velocity, self.max_accel = toolhead.get_max_velocity()
-        max_z_velocity = config.getfloat(
+        self.max_z_velocity = config.getfloat(
             'max_z_velocity', self.max_velocity,
             above=0., maxval=self.max_velocity)
-        max_z_accel = config.getfloat('max_z_accel', self.max_accel,
+        self.max_z_accel = config.getfloat('max_z_accel', self.max_accel,
                                            above=0., maxval=self.max_accel)
         # Read radius and arm lengths
-        delta_radius = config.getfloat('delta_radius', above=0.)
-        print_radius = config.getfloat('print_radius', delta_radius, above=0.)
-        arm_length_a = stepper_configs[0].getfloat('arm_length', above=delta_radius)
-        arm_lengths = [
-            sconfig.getfloat('arm_length', arm_length_a, above=delta_radius)
+        self.radius = radius = config.getfloat('delta_radius', above=0.)
+        print_radius = config.getfloat('print_radius', radius, above=0.)
+        arm_length_a = stepper_configs[0].getfloat('arm_length', above=radius)
+        self.arm_lengths = arm_lengths = [
+            sconfig.getfloat('arm_length', arm_length_a, above=radius)
             for sconfig in stepper_configs]
-        angles = [sconfig.getfloat('angle', angle)
-                       for sconfig, angle in zip(stepper_configs,
-                                                 [210., 330., 90.])]
-        self.max_z = min([rail.get_homing_info().position_endstop
-                          for rail in self.rails])
-        minimum_z_position = config.getfloat('minimum_z_position', 0, maxval=self.max_z)
-        self.reinit(toolhead, max_z_velocity, max_z_accel, delta_radius, print_radius, arm_lengths, angles, minimum_z_position)
-
-    def reinit(self, toolhead, max_z_velocity, max_z_accel, delta_radius, print_radius, arm_lengths, angles, minimum_z_position, endstops=None):
-        if endstops:
-            for i in range(3):
-                self.rails[i].set_position_endstop(endstops[i])
-        # Setup max velocity
-        self.max_velocity, self.max_accel = toolhead.get_max_velocity()
-        self.max_z_velocity = max_z_velocity
-        self.max_z_accel = max_z_accel
-        # Read radius and arm lengths
-        self.radius = radius = delta_radius
-        self.print_radius = print_radius
-        self.arm_lengths = arm_lengths
         self.arm2 = [arm ** 2 for arm in arm_lengths]
         self.abs_endstops = [(rail.get_homing_info().position_endstop
                               + math.sqrt(arm2 - radius ** 2))
                              for rail, arm2 in zip(self.rails, self.arm2)]
         # Determine tower locations in cartesian space
-        self.angles = angles
+        self.angles = [sconfig.getfloat('angle', angle)
+                       for sconfig, angle in zip(stepper_configs,
+                                                 [210., 330., 90.])]
         self.towers = [(math.cos(math.radians(angle)) * radius,
                         math.sin(math.radians(angle)) * radius)
                        for angle in self.angles]
@@ -80,7 +62,7 @@ class DeltaKinematics:
             self._actuator_to_cartesian(self.abs_endstops))
         self.max_z = min([rail.get_homing_info().position_endstop
                           for rail in self.rails])
-        self.min_z = minimum_z_position
+        self.min_z = config.getfloat('minimum_z_position', 0, maxval=self.max_z)
         self.limit_z = min([ep - arm
                             for ep, arm in zip(self.abs_endstops, arm_lengths)])
         self.min_arm_length = min_arm_length = min(arm_lengths)
@@ -93,12 +75,10 @@ class DeltaKinematics:
         half_min_step_dist = min([r.get_steppers()[0].get_step_dist()
                                   for r in self.rails]) * .5
         min_arm_length = min(arm_lengths)
-
         def ratio_to_xy(ratio):
             return (ratio * math.sqrt(min_arm_length ** 2 / (ratio ** 2 + 1.)
                                       - half_min_step_dist ** 2)
                     + half_min_step_dist - radius)
-
         self.slow_xy2 = ratio_to_xy(SLOW_RATIO) ** 2
         self.very_slow_xy2 = ratio_to_xy(2. * SLOW_RATIO) ** 2
         self.max_xy2 = min(print_radius, min_arm_length - radius,
@@ -111,6 +91,38 @@ class DeltaKinematics:
         self.axes_min = toolhead.Coord(-max_xy, -max_xy, self.min_z, 0.)
         self.axes_max = toolhead.Coord(max_xy, max_xy, self.max_z, 0.)
         self.set_position([0., 0., 0.], ())
+
+    def reinit(self, radius, arms, angles, endstops):
+        for i in range(3):
+            self.rails[i].set_position_endstop(endstops[i])
+        self.radius = radius
+        self.arm_lengths = arms
+        self.arm2 = [arm ** 2 for arm in self.arm_lengths]
+        self.abs_endstops = [(rail.get_homing_info().position_endstop
+                              + math.sqrt(arm2 - radius ** 2))
+                             for rail, arm2 in zip(self.rails, self.arm2)]
+        # Determine tower locations in cartesian space
+        self.angles = angles
+        self.towers = [(math.cos(math.radians(angle)) * radius,
+                        math.sin(math.radians(angle)) * radius)
+                       for angle in self.angles]
+        for r, a, t in zip(self.rails, self.arm2, self.towers):
+            r.setup_itersolve('delta_stepper_alloc', a, t[0], t[1])
+
+        # Setup boundary checks
+        self.need_home = True
+        self.limit_xy2 = -1.
+        self.home_position = tuple(
+            self._actuator_to_cartesian(self.abs_endstops))
+        self.max_z = min([rail.get_homing_info().position_endstop
+                          for rail in self.rails])
+        self.limit_z = min([ep - arm
+                            for ep, arm in zip(self.abs_endstops, arms)])
+        self.min_arm_length = min_arm_length = min(arms)
+        self.min_arm2 = min_arm_length**2
+
+        self.set_position([0., 0., 0.], ())
+
     def get_steppers(self):
         return [s for rail in self.rails for s in rail.get_steppers()]
     def _actuator_to_cartesian(self, spos):
