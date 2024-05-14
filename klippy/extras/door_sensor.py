@@ -117,8 +117,12 @@ class OpenHelper:
                 (self.name, eventtime))
             self.reactor.register_callback(self._open_event_handler)
     def get_status(self, eventtime=None):
-        disabled = self.save_variables.get_variable("disable-door-sensor") \
-            if self.save_variables is not None else False
+        try:
+            disabled = self.save_variables.get_variable("disable-door-sensor") \
+                if self.save_variables is not None else False
+        except Exception as e:
+            logging.warning(e)
+            disabled = True
         return {
             "door_closed": self.door_closed or disabled,
             "enabled": not disabled}

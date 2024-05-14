@@ -111,8 +111,12 @@ class RunoutHelper:
                 (self.name, eventtime))
             self.reactor.register_callback(self._runout_event_handler)
     def get_status(self, eventtime):
-        disabled = self.save_variables.get_variable("disable-filament-sensor") \
-            if self.save_variables is not None else False
+        try:
+            disabled = self.save_variables.get_variable("disable-filament-sensor") \
+                if self.save_variables is not None else False
+        except Exception as e:
+            logging.warning(e)
+            disabled = True
         return {
             "filament_detected": bool(self.filament_present),
             "enabled": bool(not disabled)}
