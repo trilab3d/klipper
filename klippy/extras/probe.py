@@ -6,6 +6,8 @@
 import logging
 import pins
 from . import manual_probe
+import random
+import math
 
 HINT_TIMEOUT = """
 If the probe did not move far enough to trigger, then
@@ -48,6 +50,7 @@ class PrinterProbe:
                                                  minval=0.)
         self.samples_retries = config.getint('samples_tolerance_retries', 0,
                                              minval=0)
+        self.randomize_retrying_radius = config.getfloat('randomize_retrying_radius', 0., above=0.)
         # Register z_virtual_endstop pin
         self.printer.lookup_object('pins').register_chip('probe', self)
         # Register homing event handlers
@@ -153,7 +156,13 @@ class PrinterProbe:
             return z_sorted[middle]
         # even number of samples
         return self._calc_mean(z_sorted[middle-1:middle+1])
-    def run_probe(self, gcmd):
+    def _randomize_point(self, x, y, radius):
+        # on circle
+        angle = random.uniform(0, 2 * math.pi)
+        new_x = x + radius * math.cos(angle)
+        new_y = y + radius * math.sin(angle)
+        return (round(new_x, 1), round(new_y, 1))
+    def run_probe(self, gcmd, allow_randomization=False):
         speed = gcmd.get_float("PROBE_SPEED", self.speed, above=0.)
         lift_speed = self.get_lift_speed(gcmd)
         sample_count = gcmd.get_int("SAMPLES", self.sample_count, minval=1)
@@ -167,24 +176,27 @@ class PrinterProbe:
         must_notify_multi_probe = not self.multi_probe_pending
         if must_notify_multi_probe:
             self.multi_probe_begin()
-        probexy = self.printer.lookup_object('toolhead').get_position()[:2]
         retries = 0
         positions = []
         while len(positions) < sample_count:
+            probexy = self.printer.lookup_object('toolhead').get_position()[:2]
             # Probe position
             pos = self._probe(speed)
             positions.append(pos)
+            # Retract
+            if len(positions) < sample_count:
+                self._move(probexy + [pos[2] + sample_retract_dist], lift_speed)
             # Check samples tolerance
             z_positions = [p[2] for p in positions]
             if max(z_positions) - min(z_positions) > samples_tolerance:
                 if retries >= samples_retries:
                     raise gcmd.error("Probe samples exceed samples_tolerance")
                 gcmd.respond_info("Probe samples exceed tolerance. Retrying...")
+                if allow_randomization and self.randomize_retrying_radius > 0.:
+                    newposx, newposy = self._randomize_point(pos[0], pos[1], self.randomize_retrying_radius)
+                    self._move([newposx, newposy, pos[2] + sample_retract_dist * 2], self.speed)
                 retries += 1
                 positions = []
-            # Retract
-            if len(positions) < sample_count:
-                self._move(probexy + [pos[2] + sample_retract_dist], lift_speed)
         if must_notify_multi_probe:
             self.multi_probe_end()
         # Calculate and return result
@@ -375,6 +387,7 @@ class ProbePointsHelper:
         def_move_z = config.getfloat('horizontal_move_z', 5.)
         self.default_horizontal_move_z = def_move_z
         self.speed = config.getfloat('speed', 50., above=0.)
+        self.randomize_points_radius = config.getfloat('randomize_points_radius', 0., above=0.)
         self.use_offsets = False
         # Internal probing state
         self.lift_speed = self.speed
@@ -391,6 +404,13 @@ class ProbePointsHelper:
         self.use_offsets = use_offsets
     def get_lift_speed(self):
         return self.lift_speed
+    def randomize_point(self, x, y, radius):
+        # inside_circle
+        angle = random.uniform(0, 2 * math.pi)
+        r = radius * math.sqrt(random.uniform(0, 1))
+        new_x = x + r * math.cos(angle)
+        new_y = y + r * math.sin(angle)
+        return (round(new_x, 1), round(new_y, 1))
     def _move_next(self):
         toolhead = self.printer.lookup_object('toolhead')
         # Lift toolhead
@@ -404,15 +424,18 @@ class ProbePointsHelper:
             toolhead.get_last_move_time()
             res = self.finalize_callback(self.probe_offsets, self.results)
             if res != "retry":
-                return True
+                return True, None
             self.results = []
         # Move to next XY probe point
         nextpos = list(self.probe_points[len(self.results)])
+        origpos = nextpos.copy()
         if self.use_offsets:
             nextpos[0] -= self.probe_offsets[0]
             nextpos[1] -= self.probe_offsets[1]
+        if self.randomize_points_radius > 0.:
+            nextpos[0], nextpos[1] = self.randomize_point(nextpos[0], nextpos[1], self.randomize_points_radius)
         toolhead.manual_move(nextpos, self.speed)
-        return False
+        return False, origpos
     def start_probe(self, gcmd):
         manual_probe.verify_no_manual_probe(self.printer)
         # Lookup objects
@@ -436,10 +459,12 @@ class ProbePointsHelper:
                              " probe's z_offset")
         probe.multi_probe_begin()
         while 1:
-            done = self._move_next()
+            done, origpos = self._move_next()
             if done:
                 break
-            pos = probe.run_probe(gcmd)
+            pos = probe.run_probe(gcmd, allow_randomization=(self.randomize_points_radius > 0.))
+            pos[0] = origpos[0]
+            pos[1] = origpos[1]
             self.results.append(pos)
         probe.multi_probe_end()
     def _manual_probe_start(self):
