@@ -138,15 +138,55 @@ DECL_SHUTDOWN(analog_in_shutdown);
 
 // Analog Endstop ---------------
 
+#define BUFFER_SIZE 128
+
+struct moving_average {
+    uint16_t buffer[BUFFER_SIZE];
+    int index;
+    int count;
+    uint32_t sum;
+};
+
 struct analog_endstop {
     struct timer timer;
     uint32_t rest_time, sample_time, nextwake;
     uint16_t value, treshold;
     struct gpio_adc pin;
-    uint8_t invalid_count, range_check_count;
     struct trsync *ts;
     uint8_t oversample_count, trigger_reason;
+    struct moving_average ma;
 };
+
+void moving_average_init(struct moving_average *ma) {
+    ma->index = 0;
+    ma->count = 0;
+    ma->sum = 0;
+}
+
+uint16_t moving_average_add_value(struct moving_average *ma, uint16_t value) {
+    // If the buffer is full, subtract the oldest value from the sum
+    if (ma->count == BUFFER_SIZE) {
+        ma->sum -= ma->buffer[ma->index];
+    } else {
+        ma->count++;
+    }
+
+    // Add the new value to the buffer and sum
+    ma->buffer[ma->index] = value;
+    ma->sum += value;
+
+    // Update the index
+    ma->index = (ma->index + 1) % BUFFER_SIZE;
+
+    if (ma->count == BUFFER_SIZE) {
+        // Return the moving average
+        // return (uint16_t)(ma->sum / ma->count);
+        // Return the moving average using bit shift for division
+        return (uint16_t)(ma->sum >> 7);  // Equivalent to ma->sum / 128 if BUFFER_SIZE is 128
+    } else {
+        return 0;
+    }
+}
 
 static uint_fast8_t analog_endstop_oversample_event(struct timer *t);
 
@@ -162,6 +202,7 @@ analog_endstop_event(struct timer *t)
     }
     uint16_t value = gpio_adc_read(a->pin);
 
+    moving_average_add_value(&a->ma, value);
 
     uint32_t nextwake = a->timer.waketime + a->rest_time;
     if (value < a->treshold) {
@@ -184,20 +225,13 @@ analog_endstop_oversample_event(struct timer *t)
         a->timer.waketime += sample_delay;
         return SF_RESCHEDULE;
     }
-    uint16_t value = gpio_adc_read(a->pin);
+    uint16_t value = moving_average_add_value(&a->ma, gpio_adc_read(a->pin));
 
-    if (value < a->treshold) {
-        // No longer matching - reschedule for the next attempt
-        a->timer.func = analog_endstop_event;
-        a->timer.waketime = a->nextwake;
-        return SF_RESCHEDULE;
-    }
-    uint8_t count = a->oversample_count - 1;
-    if (!count) {
+    if (value > a->treshold) {
         trsync_do_trigger(a->ts, a->trigger_reason);
         return SF_DONE;
     }
-    a->oversample_count = count;
+
     a->timer.waketime += a->sample_time;
     return SF_RESCHEDULE;
 }
@@ -233,6 +267,7 @@ command_analog_endstop_home(uint32_t *args)
     e->treshold = args[5];
     e->ts = trsync_oid_lookup(args[6]);
     e->trigger_reason = args[7];
+    moving_average_init(&e->ma);
     sched_add_timer(&e->timer);
 }
 DECL_COMMAND(command_analog_endstop_home,
