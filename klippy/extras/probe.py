@@ -194,7 +194,7 @@ class PrinterProbe:
                 gcmd.respond_info("Probe samples exceed tolerance. Retrying...")
                 if allow_randomization and self.randomize_retrying_radius > 0.:
                     newposx, newposy = self._randomize_point(pos[0], pos[1], self.randomize_retrying_radius)
-                    self._move([newposx, newposy, pos[2] + sample_retract_dist * 2], self.speed)
+                    self._move([newposx, newposy, pos[2] + sample_retract_dist * 2], lift_speed)
                 retries += 1
                 positions = []
         if must_notify_multi_probe:
