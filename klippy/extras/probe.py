@@ -179,13 +179,11 @@ class PrinterProbe:
         retries = 0
         positions = []
         while len(positions) < sample_count:
-            probexy = self.printer.lookup_object('toolhead').get_position()[:2]
+            toolhead = self.printer.lookup_object('toolhead')
+            probexy = toolhead.get_position()[:2]
             # Probe position
             pos = self._probe(speed)
             positions.append(pos)
-            # Retract
-            if len(positions) < sample_count:
-                self._move(probexy + [pos[2] + sample_retract_dist], lift_speed)
             # Check samples tolerance
             z_positions = [p[2] for p in positions]
             if max(z_positions) - min(z_positions) > samples_tolerance:
@@ -194,9 +192,14 @@ class PrinterProbe:
                 gcmd.respond_info("Probe samples exceed tolerance. Retrying...")
                 if allow_randomization and self.randomize_retrying_radius > 0.:
                     newposx, newposy = self._randomize_point(pos[0], pos[1], self.randomize_retrying_radius)
+                    self._move(probexy + [pos[2] + sample_retract_dist], lift_speed)
                     self._move([newposx, newposy, pos[2] + sample_retract_dist * 2], lift_speed)
+                    toolhead.dwell(0.5)
                 retries += 1
                 positions = []
+            # Retract
+            if len(positions) < sample_count:
+                self._move(probexy + [pos[2] + sample_retract_dist], lift_speed)
         if must_notify_multi_probe:
             self.multi_probe_end()
         # Calculate and return result
