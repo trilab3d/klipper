@@ -21,10 +21,10 @@ class QueueHandler(logging.Handler):
             self.handleError(record)
 
 # Class to poll a queue in a background thread and log each message
-class QueueListener(logging.handlers.TimedRotatingFileHandler):
+class QueueListener(logging.handlers.RotatingFileHandler):
     def __init__(self, filename):
-        logging.handlers.TimedRotatingFileHandler.__init__(
-            self, filename, when='midnight', backupCount=5)
+        logging.handlers.RotatingFileHandler.__init__(
+            self, filename, maxBytes=104_857_60, backupCount=2)  # max 100MB
         self.bg_queue = queue.Queue()
         self.bg_thread = threading.Thread(target=self._bg_thread)
         self.bg_thread.start()
@@ -46,7 +46,7 @@ class QueueListener(logging.handlers.TimedRotatingFileHandler):
     def clear_rollover_info(self):
         self.rollover_info.clear()
     def doRollover(self):
-        logging.handlers.TimedRotatingFileHandler.doRollover(self)
+        logging.handlers.RotatingFileHandler.doRollover(self)
         lines = [self.rollover_info[name]
                  for name in sorted(self.rollover_info)]
         lines.append(
