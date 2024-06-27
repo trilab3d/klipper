@@ -214,9 +214,11 @@ class GCodeDispatch:
                 self.printer.send_event("gcode:command_error")
                 if not need_ack:
                     raise
-            except:
+            except Exception as e:
                 msg = 'Internal error on command:"%s"' % (cmd,)
                 logging.exception(msg)
+                import klippy
+                klippy.log_exception(type(e), e, e.__traceback__)
                 self.printer.invoke_shutdown(msg)
                 self._respond_error(msg)
                 if not need_ack:

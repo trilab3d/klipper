@@ -53,6 +53,8 @@ class TemplateWrapper:
             msg = "Error loading template '%s': %s" % (
                  name, traceback.format_exception_only(type(e), e)[-1])
             logging.exception(msg)
+            import klippy
+            klippy.log_exception(type(e), e, e.__traceback__)
             raise printer.config_error(msg)
     def render(self, context=None):
         if context is None:
@@ -63,6 +65,8 @@ class TemplateWrapper:
             msg = "Error evaluating '%s': %s" % (
                 self.name, traceback.format_exception_only(type(e), e)[-1])
             logging.exception(msg)
+            import klippy
+            klippy.log_exception(type(e), e, e.__traceback__)
             raise self.gcode.error(msg)
     def run_gcode_from_command(self, context=None):
         self.gcode.run_script_from_command(self.render(context))

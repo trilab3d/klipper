@@ -28,9 +28,11 @@ class SaveVariables:
             if varfile.has_section('Variables'):
                 for name, val in varfile.items('Variables'):
                     allvars[name] = ast.literal_eval(val)
-        except:
+        except Exception as e:
             msg = "Unable to parse existing variable file"
             logging.exception(msg)
+            import klippy
+            klippy.log_exception(type(e), e, e.__traceback__)
             raise self.printer.command_error(msg)
         self.allVariables = allvars
     cmd_SAVE_VARIABLE_help = "Save arbitrary variables to disk"
@@ -43,9 +45,11 @@ class SaveVariables:
             raise gcmd.error("Unable to parse '%s' as a literal" % (value,))
         try:
            self.save_variable(varname, value)
-        except:
+        except Exception as e:
             msg = "Unable to save variable"
             logging.exception(msg)
+            import klippy
+            klippy.log_exception(type(e), e, e.__traceback__)
             self.loadVariables()
             raise gcmd.error(msg)
     def save_variable(self, varname, value):

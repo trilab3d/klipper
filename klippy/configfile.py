@@ -158,9 +158,11 @@ class PrinterConfig:
             f = open(filename, 'r')
             data = f.read()
             f.close()
-        except:
+        except Exception as e:
             msg = "Unable to open config file %s" % (filename,)
             logging.exception(msg)
+            import klippy
+            klippy.log_exception(type(e), e, e.__traceback__)
             raise error(msg)
         return data.replace('\r\n', '\n')
     def _find_autosave_data(self, data):
@@ -398,6 +400,8 @@ class PrinterConfig:
         except error as e:
             msg = "Unable to parse existing config on SAVE_CONFIG"
             logging.exception(msg)
+            import klippy
+            klippy.log_exception(type(e), e, e.__traceback__)
             raise gcode.error(msg)
         #regular_data = self._strip_duplicates(regular_data, self.autosave)
         #self._disallow_include_conflicts(regular_data, cfgname, gcode) # this is not problem, it works as fine.
@@ -418,9 +422,11 @@ class PrinterConfig:
             f.close()
             os.rename(cfgname, backup_name)
             os.rename(temp_name, cfgname)
-        except:
+        except Exception as e:
             msg = "Unable to write config file during SAVE_CONFIG"
             logging.exception(msg)
+            import klippy
+            klippy.log_exception(type(e), e, e.__traceback__)
             raise gcode.error(msg)
 
         if(gcmd.get_int('RESTART', 1)):

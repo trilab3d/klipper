@@ -265,9 +265,11 @@ class ToolHead:
             raise
         except self.printer.lookup_object('pins').error as e:
             raise
-        except:
+        except Exception as e:
             msg = "Error loading kinematics '%s'" % (kin_name,)
             logging.exception(msg)
+            import klippy
+            klippy.log_exception(type(e), e, e.__traceback__)
             raise config.error(msg)
         # Register commands
         gcode.register_command('G4', self.cmd_G4)

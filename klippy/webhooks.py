@@ -276,6 +276,8 @@ class ClientConnection:
         except (TypeError, ValueError) as e:
             msg = ("json encoding error: %s" % (str(e),))
             logging.exception(msg)
+            import klippy
+            klippy.log_exception(type(e), e, e.__traceback__)
             self.printer.invoke_shutdown(msg)
             return
         if not self.is_blocking:
