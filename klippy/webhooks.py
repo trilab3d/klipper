@@ -260,6 +260,8 @@ class ClientConnection:
             msg = ("Internal Error on WebRequest: %s"
                    % (web_request.get_method()))
             logging.exception(msg)
+            import klippy
+            klippy.log_exception(type(e),e,e.__traceback__)
             web_request.set_error(WebRequestError(str(e)))
             self.printer.invoke_shutdown(msg)
         result = web_request.finish()

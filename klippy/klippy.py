@@ -8,12 +8,29 @@ import sys, os, gc, optparse, logging, time, collections, importlib
 import util, reactor, queuelogger, msgproto
 import gcode, configfile, pins, mcu, toolhead, webhooks
 import extras.invalidator
+import threading, base64
+from types import TracebackType
 
 # Exception formater for Zabbix
-def my_except_hook(exctype, value, traceback):
-    logging.error(f"Uncaught Exception Handler: {exctype} - {value}")
-    sys.__excepthook__(exctype, value, traceback)
-sys.excepthook = my_except_hook
+def log_exception(exctype:type[BaseException], value:BaseException, tb:TracebackType, thr = None):
+    str_tb = ""
+    local_vars = {}
+    while tb:
+        filename = tb.tb_frame.f_code.co_filename
+        name = tb.tb_frame.f_code.co_name
+        line_no = tb.tb_lineno
+        str_tb += f"File {filename} line {line_no}, in {name}\n"
+        local_vars = tb.tb_frame.f_locals
+        tb = tb.tb_next
+    str_tb += f"local variables: {local_vars}\ntraceback end"
+    compressed_tb = base64.b64encode(str_tb.encode())
+    logging.error(f"Compressed unhandled exception: {exctype.__name__}: {value}, compressed traceback: {compressed_tb}, thread: {thr}, traceback:\n{str_tb}")
+
+def log_thread_exception(err):
+    log_exception(*err)
+
+sys.excepthook = log_exception
+threading.excepthook = log_thread_exception
 
 message_ready = "Printer is ready"
 
