@@ -100,6 +100,11 @@ class OpenHelper:
         # Determine "printing" status
         print_stats = self.printer.lookup_object("print_stats")
         is_printing = print_stats.get_status(eventtime)["state"] == "printing"
+        # notify door open. Used in KS for warn user that some surfaces may be hot
+        if not is_door_closed:
+            def notify(eventtime):
+                self.gcode.respond_raw("// DOOR_OPEN_PRE")
+            self.reactor.register_callback(notify)
         # Perform printer action associated with status change (if any)
         if is_door_closed:
             if not is_printing and self.close_gcode is not None:
