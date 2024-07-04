@@ -292,6 +292,7 @@ class PrinterHeaters:
         self.available_sensors = []
         self.available_monitors = []
         self.has_started = self.have_load_sensors = False
+        self.waiting_status = "not-waiting"  # one of non-waiting, upper-threshold:sensor, lower-threshold:sensor, range-threshold:sensor, check_busy:heater
         self.printer.register_event_handler("klippy:ready", self._handle_ready)
         self.printer.register_event_handler("gcode:request_restart",
                                             self.turn_off_all_heaters)
@@ -360,7 +361,8 @@ class PrinterHeaters:
     def get_status(self, eventtime):
         return {'available_heaters': self.available_heaters,
                 'available_sensors': self.available_sensors,
-                'available_monitors': self.available_monitors}
+                'available_monitors': self.available_monitors,
+                'waiting_status': self.waiting_status}
     def turn_off_all_heaters(self, print_time=0.):
         for heater in self.heaters.values():
             heater.set_temp(0.)
@@ -391,6 +393,7 @@ class PrinterHeaters:
         # Helper to wait on heater.check_busy() and report M105 temperatures
         if self.printer.get_start_args().get('debugoutput') is not None:
             return
+        self.waiting_status = f"check_busy:{heater.name}"
         toolhead = self.printer.lookup_object("toolhead")
         gcode = self.printer.lookup_object("gcode")
         reactor = self.printer.get_reactor()
@@ -399,6 +402,7 @@ class PrinterHeaters:
             print_time = toolhead.get_last_move_time()
             gcode.respond_raw(self._get_temp(eventtime))
             eventtime = reactor.pause(eventtime + 1.)
+        self.waiting_status = "not-waiting"
     def set_temperature(self, heater, temp, wait=False):
         toolhead = self.printer.lookup_object('toolhead')
         toolhead.register_lookahead_callback((lambda pt: None))
@@ -421,16 +425,24 @@ class PrinterHeaters:
             sensor = self.heaters[sensor_name]
         else:
             sensor = self.printer.lookup_object(sensor_name)
+        if min_temp == float('-inf'):
+            self.waiting_status = f"upper-threshold:{sensor_name}"
+        elif max_temp == float('inf'):
+            self.waiting_status = f"lower-threshold:{sensor_name}"
+        else:
+            self.waiting_status = f"range-threshold:{sensor_name}"
         toolhead = self.printer.lookup_object("toolhead")
         reactor = self.printer.get_reactor()
         eventtime = reactor.monotonic()
         while not self.printer.is_shutdown() and not self.printer.in_cancelling_state:
             temp, target = sensor.get_temp(eventtime)
             if temp >= min_temp and temp <= max_temp:
+                self.waiting_status = "not-waiting"
                 return
             print_time = toolhead.get_last_move_time()
             gcmd.respond_raw(self._get_temp(eventtime))
             eventtime = reactor.pause(eventtime + 1.)
+        self.waiting_status = "not-waiting"
 
 def load_config(config):
     return PrinterHeaters(config)
