@@ -35,6 +35,10 @@ class SaveVariables:
             klippy.log_exception(type(e), e, e.__traceback__)
             raise self.printer.command_error(msg)
         self.allVariables = allvars
+        # fix for older HT-A nozzle notation
+        if "nozzle" in allvars and allvars["nozzle"].endswith("HT-A"):
+            parts = allvars["nozzle"].split(" ")
+            self.save_variable("nozzle", f"{parts[0]} HT")
     cmd_SAVE_VARIABLE_help = "Save arbitrary variables to disk"
     def cmd_SAVE_VARIABLE(self, gcmd):
         varname = gcmd.get('VARIABLE')
