@@ -202,6 +202,8 @@ class VirtualSD:
         self.file_position = 0
         self.file_size = fsize
         self.print_stats.set_current_file(filename)
+        pause_resume = self.printer.lookup_object('pause_resume')
+        pause_resume.resume_command = None
     def cmd_M24(self, gcmd):
         # Start/resume SD print
         self.do_resume()
