@@ -393,7 +393,7 @@ class PrinterHeaters:
         # Helper to wait on heater.check_busy() and report M105 temperatures
         if self.printer.get_start_args().get('debugoutput') is not None:
             return
-        self.waiting_status = f"check_busy:{heater.name}"
+        self.waiting_status = f"check-busy:{heater.name}"
         toolhead = self.printer.lookup_object("toolhead")
         gcode = self.printer.lookup_object("gcode")
         reactor = self.printer.get_reactor()
@@ -426,11 +426,11 @@ class PrinterHeaters:
         else:
             sensor = self.printer.lookup_object(sensor_name)
         if min_temp == float('-inf'):
-            self.waiting_status = f"upper-threshold:{sensor_name}"
+            self.waiting_status = f"upper-threshold:{sensor_name}:{max_temp}"
         elif max_temp == float('inf'):
-            self.waiting_status = f"lower-threshold:{sensor_name}"
+            self.waiting_status = f"lower-threshold:{sensor_name}:{min_temp}"
         else:
-            self.waiting_status = f"range-threshold:{sensor_name}"
+            self.waiting_status = f"range-threshold:{sensor_name}:{min_temp}:{max_temp}"
         toolhead = self.printer.lookup_object("toolhead")
         reactor = self.printer.get_reactor()
         eventtime = reactor.monotonic()
