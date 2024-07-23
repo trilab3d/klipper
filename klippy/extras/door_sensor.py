@@ -21,7 +21,9 @@ class OpenHelper:
         self.save_variables = None
         self.interlock = None
         if self.print_interlock is not None:
-            self.interlock = self.print_interlock.create_interlock("Doors are open")
+            def cb():
+                self.gcode.respond_raw("// DOOR_OPEN")
+            self.interlock = self.print_interlock.create_interlock("Doors are open", callback=cb)
             self.interlock.set_lock(True)
         self.open_gcode = self.close_gcode = None
         gcode_macro = self.printer.load_object(config, 'gcode_macro')
@@ -129,7 +131,8 @@ class OpenHelper:
             logging.warning(e)
             disabled = True
         return {
-            "door_closed": self.door_closed or disabled,
+            "door_closed": bool(self.door_closed or disabled),
+            "door_closed_raw": bool(self.door_closed),
             "enabled": not disabled}
     cmd_QUERY_DOOR_SENSOR_help = "Query the status of the Door Sensor"
     def cmd_QUERY_DOOR_SENSOR(self, gcmd):

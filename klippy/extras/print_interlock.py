@@ -1,8 +1,9 @@
 
 class Interlock:
-    def __init__(self, lock_reason):
+    def __init__(self, lock_reason,callback=None):
         self.locked = False
         self.lock_reason = lock_reason
+        self.callback = callback
 
     def set_lock(self, locked):
         self.locked = locked
@@ -41,16 +42,18 @@ class PrintInterlock:
     def handle_connect(self):
         self.respond = self.printer.lookup_object('respond', None)
 
-    def create_interlock(self, lock_reason):
-        interlock = Interlock(lock_reason)
+    def create_interlock(self, lock_reason, callback=None):
+        interlock = Interlock(lock_reason,callback)
         self.locks.append(interlock)
         return interlock
 
-    def check_locked(self, print_reason=False):
+    def check_locked(self, print_reason=False, do_callback=True):
         for interlock in self.locks:
             if interlock.locked:
                 if print_reason:
                     self.gcode.respond_raw(f"!! {interlock.lock_reason}")
+                if do_callback and interlock.callback:
+                    interlock.callback()
                 return True
         return False
 
