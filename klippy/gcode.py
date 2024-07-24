@@ -10,13 +10,6 @@ class CommandError(Exception):
 
 Coord = collections.namedtuple('Coord', ('x', 'y', 'z', 'e'))
 
-RERUN_NEEDED_COMMAND = [
-    "TEMPERATURE_WAIT",
-    "M109",
-    "M190",
-    "M191"
-]
-
 class GCodeCommand:
     error = CommandError
     def __init__(self, gcode, command, commandline, params, need_ack):
@@ -103,7 +96,6 @@ class GCodeDispatch:
         printer.register_event_handler("klippy:shutdown", self._handle_shutdown)
         printer.register_event_handler("klippy:disconnect",
                                        self._handle_disconnect)
-        self.last_dispatched_command = None
         # Command handling
         self.is_printer_ready = False
         self.mutex = printer.get_reactor().mutex()
@@ -195,7 +187,6 @@ class GCodeDispatch:
     args_r = re.compile('([A-Z_]+|[A-Z*/])')
     def _process_commands(self, commands, need_ack=True):
         for line in commands:
-            self.last_dispatched_command = line
             # Ignore comments and leading/trailing spaces
             line = origline = line.strip()
             cpos = line.find(';')
@@ -236,15 +227,8 @@ class GCodeDispatch:
     def run_script_from_command(self, script):
         self._process_commands(script.split('\n'), need_ack=False)
     def run_script(self, script):
-        if script.startswith("CANCEL_PRINT") or script.startswith("PAUSE"):
-            if self.last_dispatched_command and script.startswith("PAUSE"):
-                pause_resume = self.printer.lookup_object('pause_resume')
-                if not pause_resume.is_paused:
-                    command_capital = self.last_dispatched_command.upper().strip()
-                    for cmd in RERUN_NEEDED_COMMAND:
-                        if command_capital.startswith(cmd):
-                            pause_resume.resume_command = self.last_dispatched_command
-                            break
+        script_stripped = script.strip()
+        if script_stripped.startswith("CANCEL_PRINT") or script_stripped.startswith("PAUSE"):
             self.printer.in_cancelling_state = True
         with self.mutex:
             self._process_commands(script.split('\n'), need_ack=False)

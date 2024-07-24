@@ -7,6 +7,13 @@ import os, logging, io
 
 VALID_GCODE_EXTS = ['gcode', 'g', 'gco']
 
+RERUN_NEED_COMMANDS = [
+    "TEMPERATURE_WAIT",
+    "M109",
+    "M190",
+    "M191"
+]
+
 class VirtualSD:
     def __init__(self, config):
         self.printer = config.get_printer()
@@ -202,8 +209,6 @@ class VirtualSD:
         self.file_position = 0
         self.file_size = fsize
         self.print_stats.set_current_file(filename)
-        pause_resume = self.printer.lookup_object('pause_resume')
-        pause_resume.resume_command = None
     def cmd_M24(self, gcmd):
         # Start/resume SD print
         self.do_resume()
@@ -288,7 +293,18 @@ class VirtualSD:
                 logging.exception("virtual_sdcard dispatch")
                 break
             self.cmd_from_sd = False
-            self.file_position = self.next_file_position
+
+            gcode_need_repeat = False
+            if self.printer.in_cancelling_state:
+                line_stripped_upper = line.strip().upper()
+                for cmd in RERUN_NEED_COMMANDS:
+                    if line_stripped_upper.startswith(cmd):
+                        gcode_need_repeat = True
+                        logging.info(f"Line {line} needs to be repeated")
+                        break
+            if not gcode_need_repeat:
+                logging.info(f"Line {line} does NOT need to be repeated")
+                self.file_position = self.next_file_position
             # Do we need to skip around?
             if self.next_file_position != next_file_position:
                 try:
