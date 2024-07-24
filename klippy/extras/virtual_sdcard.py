@@ -246,6 +246,10 @@ class VirtualSD:
             return self.reactor.NEVER
         self.print_stats.note_start()
         gcode_mutex = self.gcode.get_mutex()
+        # check interlocks just before print starts
+        if self.print_interlock is not None and self.print_interlock.check_locked(True):
+            pause_resume = self.printer.lookup_object('pause_resume')
+            pause_resume.do_pause("interlock")
         partial_input = ""
         lines = []
         error_message = None
