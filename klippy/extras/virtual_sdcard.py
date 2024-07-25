@@ -127,9 +127,6 @@ class VirtualSD:
             self.work_handler, self.reactor.NOW)
         self.printer.send_event("virtual_sdcard:resume")
         self.printer.in_cancelling_state = False
-        if self.print_interlock is not None and self.print_interlock.check_locked(True):
-            pause_resume = self.printer.lookup_object('pause_resume')
-            pause_resume.do_pause("interlock")
     def do_cancel(self):
         if self.current_file is not None:
             self.do_pause()
@@ -249,6 +246,8 @@ class VirtualSD:
         # check interlocks just before print starts
         if self.print_interlock is not None and self.print_interlock.check_locked(True):
             pause_resume = self.printer.lookup_object('pause_resume')
+            self.cmd_from_sd = True
+            self.must_pause_work = True
             pause_resume.do_pause("interlock")
         partial_input = ""
         lines = []
