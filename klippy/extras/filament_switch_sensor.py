@@ -54,6 +54,8 @@ class RunoutHelper:
             dfs = self.save_variables.get_variable("disable-filament-sensor")
             if dfs is None:
                 self.save_variables.save_variable("disable-filament-sensor", False)
+            if not dfs and self.interlock is not None:
+                self.interlock.set_lock(not self.filament_present)
         except Exception as e:
             logging.error(f"Door Sensor Error {e}")
             self.printer.invoke_shutdown(e)
@@ -131,8 +133,8 @@ class RunoutHelper:
     def cmd_SET_FILAMENT_SENSOR(self, gcmd):
         sensor_enabled = gcmd.get_int("ENABLE", 1)
         self.save_variables.save_variable("disable-filament-sensor", not sensor_enabled)
-        if not sensor_enabled and self.interlock is not None:
-            self.interlock.set_lock(False)
+        if self.interlock is not None:
+            self.interlock.set_lock(sensor_enabled and not self.filament_present)
 
 class SwitchSensor:
     def __init__(self, config):
