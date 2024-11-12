@@ -23,7 +23,9 @@ class Heater:
         self.sensor = sensor
         self.min_temp = config.getfloat('min_temp', minval=KELVIN_TO_CELSIUS)
         self.max_temp = config.getfloat('max_temp', above=self.min_temp)
-        self.sensor.setup_minmax(self.min_temp, self.max_temp)
+        self.max_temp_fail = config.getfloat('max_temp_fail', minval=self.max_temp, default=self.max_temp)
+        self.min_temp_fail = config.getfloat('min_temp_fail', maxval=self.min_temp, default=self.min_temp)
+        self.sensor.setup_minmax(self.min_temp_fail, self.max_temp_fail)
         self.sensor.setup_callback(self.temperature_callback)
         self.pwm_delay = self.sensor.get_report_time_delta()
         # Setup temperature checks
@@ -149,7 +151,9 @@ class HeaterMaster(Heater):
         self.sensor = sensor
         self.min_temp = config.getfloat('min_temp', minval=KELVIN_TO_CELSIUS)
         self.max_temp = config.getfloat('max_temp', above=self.min_temp)
-        self.sensor.setup_minmax(self.min_temp, self.max_temp)
+        self.max_temp_fail = config.getfloat('max_temp_fail', minval=self.max_temp, default=self.max_temp)
+        self.min_temp_fail = config.getfloat('min_temp_fail', maxval=self.min_temp, default=self.min_temp)
+        self.sensor.setup_minmax(self.min_temp_fail, self.max_temp_fail)
         self.sensor.setup_callback(self.temperature_callback)
         # Setup temperature checks
         self.min_extrude_temp = config.getfloat(
