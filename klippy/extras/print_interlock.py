@@ -57,5 +57,13 @@ class PrintInterlock:
                 return True
         return False
 
+    def get_status(self, eventtime):
+        lock_statuses = {}
+        for lock in self.locks:
+            lock_statuses[lock.lock_reason] = lock.locked
+        return {
+            'lock_statuses': lock_statuses,
+        }
+
 def load_config(config):
     return PrintInterlock(config)

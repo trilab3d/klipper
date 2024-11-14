@@ -717,7 +717,21 @@ class MCU:
         prefix = "MCU '%s' shutdown: " % (self._name,)
         if params['#name'] == 'is_shutdown':
             prefix = "Previous MCU '%s' shutdown: " % (self._name,)
-        self._printer.invoke_async_shutdown(prefix + msg + error_help(msg))
+        if msg.startswith("ADC out of range"):
+            pheaters = self._printer.lookup_object("heaters")
+            temp_string = "\n\nEvent temperatures:\n"
+            for heater_name in pheaters.heaters:
+                heater = pheaters.heaters[heater_name]
+                temp = heater.smoothed_temp
+                min_temp = heater.min_temp
+                max_temp = heater.max_temp
+                was_faulty = temp <= min_temp or temp >= max_temp
+                hstr = f"{'*' if was_faulty else ''}{heater_name}: {int(temp*10)/10}˚C / {min_temp} to {max_temp}˚C"
+                logging.info(hstr)
+                temp_string += hstr + "\n"
+            self._printer.invoke_async_shutdown(prefix + msg + temp_string + error_help(msg))
+        else:
+            self._printer.invoke_async_shutdown(prefix + msg + error_help(msg))
     def _handle_starting(self, params):
         if not self._is_shutdown:
             self._printer.invoke_async_shutdown("MCU '%s' spontaneous restart"
