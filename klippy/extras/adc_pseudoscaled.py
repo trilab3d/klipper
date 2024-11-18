@@ -48,7 +48,7 @@ class PrinterADCPseudoscaled:
             m for n, m in self.printer.lookup_objects(module='mcu')]
         self.mcu = self.all_mcus[0]
         self.name = config.get_name().split()[1]
-        self.vref_initial_guess = config.getfloat("vref_initial_guess", 0.9871132430936509)
+        self.vref_initial_guess = config.getfloat("vref_initial_guess", 0.9965734891223963)
         self.vssa_initial_guess = config.getfloat("vssa_initial_guess", 0.0862477559426571)
         self.last_vref = (0., self.vref_initial_guess)
         self.last_vssa = (0., self.vssa_initial_guess)
