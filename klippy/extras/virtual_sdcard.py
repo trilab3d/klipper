@@ -319,6 +319,7 @@ class VirtualSD:
                 lines = []
                 partial_input = ""
         logging.info("Exiting SD card print (position %d)", self.file_position)
+        self.printer.in_cancelling_state = False
         self.work_timer = None
         self.cmd_from_sd = False
         if error_message is not None:
