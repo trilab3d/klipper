@@ -17,6 +17,7 @@ class PrinterHeaterFan:
         self.printer.register_event_handler("klippy:ready", self.handle_ready)
         self.heater_names = config.getlist("heater", ("extruder",))
         self.heater_temp = config.getfloat("heater_temp", 50.0)
+        self.heater_temp_hyst = config.getfloat("heater_temp_hyst", 0.5)
         self.min_settable_value = config.getfloat("min_settable_value", 0)
         self.is_print_fan = config.getboolean("is_print_fan", False)
         self.heaters = []
@@ -57,8 +58,12 @@ class PrinterHeaterFan:
         speed = 0.
         for heater in self.heaters:
             current_temp, target_temp = heater.get_temp(eventtime)
-            if target_temp or current_temp > self.heater_temp:
-                speed = self.fan_speed
+            if self.last_speed == 0:
+                if target_temp or current_temp > (self.heater_temp + self.heater_temp_hyst):
+                    speed = self.fan_speed
+            elif self.last_speed > 0:
+                if target_temp or current_temp > (self.heater_temp - self.heater_temp_hyst):
+                    speed = self.fan_speed
         if speed != self.last_speed:
             self.last_speed = speed
             curtime = self.printer.get_reactor().monotonic()
