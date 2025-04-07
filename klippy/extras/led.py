@@ -13,20 +13,49 @@ RENDER_TIME = 0.500
 class LEDHelper:
     def __init__(self, config, update_func, led_count=1):
         self.printer = config.get_printer()
+        self.reactor = self.printer.get_reactor()
+        self.all_mcus = [
+            m for n, m in self.printer.lookup_objects(module='mcu')]
+        self.mcu = self.all_mcus[0]
         self.update_func = update_func
         self.led_count = led_count
         self.need_transmit = False
+        self.save_variables = None
+        self.timeout_timer = None
+        self.printer.register_event_handler("klippy:ready", self._handle_ready)
+        self.printer.register_event_handler("klippy:connect", self._handle_connect)
         # Initial color
         red = config.getfloat('initial_RED', 0., minval=0., maxval=1.)
         green = config.getfloat('initial_GREEN', 0., minval=0., maxval=1.)
         blue = config.getfloat('initial_BLUE', 0., minval=0., maxval=1.)
         white = config.getfloat('initial_WHITE', 0., minval=0., maxval=1.)
         self.led_state = [(red, green, blue, white)] * led_count
+        self.timeout = 0
         # Register commands
-        name = config.get_name().split()[-1]
+        self.name = name = config.get_name().split()[-1]
         gcode = self.printer.lookup_object('gcode')
         gcode.register_mux_command("SET_LED", "LED", name, self.cmd_SET_LED,
                                    desc=self.cmd_SET_LED_help)
+        gcode.register_mux_command("SET_LED_TIMEOUT", "LED", name, self.cmd_SET_LED_TIMEOUT,
+                                   desc=self.cmd_SET_LED_TIMEOUT_help)
+    def _handle_connect(self):
+        try:
+            self.save_variables = self.printer.lookup_object('save_variables')
+            lt = self.save_variables.get_variable(f"led-timeout-{self.name}")
+            if lt is None:
+                lt = 30*60
+                self.save_variables.save_variable(f"led-timeout-{self.name}", lt)
+            self.timeout = lt
+        except Exception as e:
+            logging.error(f"LED Error {e}")
+            self.printer.invoke_shutdown(e)
+    def _handle_ready(self):
+        self.timeout_timer = self.reactor.register_timer(self.timeout_handler)
+        if self.timeout > 0:
+            checktime = self.reactor.monotonic() + self.timeout
+        else:
+            checktime = self.reactor.NEVER
+        self.reactor.update_timer(self.timeout_timer, checktime)
     def get_led_count(self):
         return self.led_count
     def set_color(self, index, color):
@@ -72,8 +101,26 @@ class LEDHelper:
         else:
             #Send update now (so as not to wake toolhead and reset idle_timeout)
             lookahead_bgfunc(None)
+        if self.timeout > 0:
+            checktime = self.reactor.monotonic() + self.timeout
+            self.reactor.update_timer(self.timeout_timer, checktime)
+    cmd_SET_LED_TIMEOUT_help = "Set timeout in seconds of LED strip (0 for disable)"
+    def cmd_SET_LED_TIMEOUT(self, gcmd):
+        self.timeout = gcmd.get_float('TIMEOUT', 0., minval=0.)
+        self.save_variables.save_variable(f"led-timeout-{self.name}", self.timeout)
+        if self.timeout > 0:
+            checktime = self.reactor.monotonic() + self.timeout
+        else:
+            checktime = self.reactor.NEVER
+        self.reactor.update_timer(self.timeout_timer, checktime)
+    def timeout_handler(self, eventtime):
+        self.set_color(None, (0,0,0,0))
+        curtime = self.reactor.monotonic()
+        print_time = self.mcu.estimated_print_time(curtime+1)  # increase +1 if timer too close
+        self.check_transmit(print_time)
+        return self.reactor.NEVER
     def get_status(self, eventtime=None):
-        return {'color_data': self.led_state}
+        return {'color_data': self.led_state, "timeout": self.timeout}
 
 # Main LED tracking code
 class PrinterLED:
