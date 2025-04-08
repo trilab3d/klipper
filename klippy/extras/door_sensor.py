@@ -20,6 +20,7 @@ class OpenHelper:
         self.print_interlock = self.printer.lookup_object('print_interlock',None)
         self.save_variables = None
         self.interlock = None
+        self.led_strip = None
         if self.print_interlock is not None:
             def cb():
                 self.gcode.respond_raw("// DOOR_OPEN")
@@ -65,6 +66,7 @@ class OpenHelper:
         except Exception as e:
             logging.error(f"Door Sensor Error {e}")
             self.printer.invoke_shutdown(e)
+        self.led_strip = self.printer.lookup_object('led light')
     def _open_event_handler(self, eventtime):
         # Pausing from inside an event requires that the pause portion
         # of pause_resume execute immediately.
@@ -106,6 +108,8 @@ class OpenHelper:
         if not is_door_closed:
             def notify(eventtime):
                 self.gcode.respond_raw("// DOOR_OPEN_PRE")
+                if self.led_strip:
+                    self.led_strip.led_helper.set_led(None, [0,0,0,1])
             self.reactor.register_callback(notify)
         # Perform printer action associated with status change (if any)
         if is_door_closed:

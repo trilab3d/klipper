@@ -101,6 +101,9 @@ class LEDHelper:
         else:
             #Send update now (so as not to wake toolhead and reset idle_timeout)
             lookahead_bgfunc(None)
+    def set_led(self, index, color):
+        self.set_color(index, color)
+        self.check_transmit(None)
         if self.timeout > 0:
             checktime = self.reactor.monotonic() + self.timeout
             self.reactor.update_timer(self.timeout_timer, checktime)
