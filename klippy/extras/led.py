@@ -24,6 +24,10 @@ class LEDHelper:
         self.timeout_timer = None
         self.printer.register_event_handler("klippy:ready", self._handle_ready)
         self.printer.register_event_handler("klippy:connect", self._handle_connect)
+        self.printer.register_event_handler("virtual_sdcard:resume", self._handle_print_start)
+        self.printer.register_event_handler("virtual_sdcard:cancel", self._handle_print_end)
+        self.printer.register_event_handler("virtual_sdcard:cancel", self._handle_print_end)
+        self.printer.register_event_handler("vvirtual_sdcard:finished", self._handle_print_end)
         # Initial color
         red = config.getfloat('initial_RED', 0., minval=0., maxval=1.)
         green = config.getfloat('initial_GREEN', 0., minval=0., maxval=1.)
@@ -56,6 +60,14 @@ class LEDHelper:
         else:
             checktime = self.reactor.NEVER
         self.reactor.update_timer(self.timeout_timer, checktime)
+    def _handle_print_start(self):
+        self.set_color(None, [0,0,0,1])
+        self.check_transmit(None)
+        self.reactor.update_timer(self.timeout_timer, self.reactor.NEVER)
+    def _handle_print_end(self):
+        if self.timeout > 0:
+            checktime = self.reactor.monotonic() + self.timeout
+            self.reactor.update_timer(self.timeout_timer, checktime)
     def get_led_count(self):
         return self.led_count
     def set_color(self, index, color):
