@@ -22,6 +22,8 @@ class PIDCalibrate:
             heater = pheaters.lookup_heater(heater_name)
         except self.printer.config_error as e:
             raise gcmd.error(str(e))
+        if not isinstance(heater.control, heaters.ControlPID):
+            raise gcmd.error("This is not PID heater")
         self.printer.lookup_object('toolhead').get_last_move_time()
         calibrate = ControlAutoTune(heater, target)
         old_control = heater.set_control(calibrate)
@@ -44,7 +46,6 @@ class PIDCalibrate:
             "with these parameters and restart the printer." % (Kp, Ki, Kd))
         # Store results for SAVE_CONFIG
         configfile = self.printer.lookup_object('configfile')
-        configfile.set(heater_name, 'control', 'pid')
         configfile.set(heater_name, 'pid_Kp', "%.3f" % (Kp,))
         configfile.set(heater_name, 'pid_Ki', "%.3f" % (Ki,))
         configfile.set(heater_name, 'pid_Kd', "%.3f" % (Kd,))
