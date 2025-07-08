@@ -4,6 +4,8 @@
 #
 # This file may be distributed under the terms of the GNU GPLv3 license.
 import os, logging, io
+from pathlib import Path
+import honeybee_gcode_reader
 
 VALID_GCODE_EXTS = ['gcode', 'g', 'gco']
 
@@ -25,8 +27,9 @@ class VirtualSD:
         # sdcard state
         sd = config.get('path')
         self.sdcard_dirname = os.path.normpath(os.path.expanduser(sd))
-        self.current_file = None
-        self.file_position = self.file_size = 0
+        self.current_file_reader = None
+        self.file_position = None
+        self.file_size = 0
         # Print Stat Tracking
         self.print_stats = self.printer.load_object(config, 'print_stats')
         # Work timer
@@ -51,7 +54,7 @@ class VirtualSD:
             "SDCARD_PRINT_FILE", self.cmd_SDCARD_PRINT_FILE,
             desc=self.cmd_SDCARD_PRINT_FILE_help)
     def handle_shutdown(self):
-        if self.work_timer is not None:
+        """ if self.work_timer is not None:
             self.must_pause_work = True
             try:
                 readpos = max(self.file_position - 1024, 0)
@@ -63,13 +66,14 @@ class VirtualSD:
                 return
             logging.info("Virtual sdcard (%d): %s\nUpcoming (%d): %s",
                          readpos, repr(data[:readcount]),
-                         self.file_position, repr(data[readcount:]))
+                         self.file_position, repr(data[readcount:])) """
+        pass  #TODO
     def handle_connect(self):
         self.print_interlock = self.printer.lookup_object('print_interlock', None)
     def stats(self, eventtime):
         if self.work_timer is None:
             return False, ""
-        return True, "sd_pos=%d" % (self.file_position,)
+        return True, "sd_pos=%d" % (self.file_position if self.file_position else 0,)
     def get_file_list(self, check_subdirs=False):
         if check_subdirs:
             flist = []
@@ -100,15 +104,15 @@ class VirtualSD:
             'file_path': self.file_path(),
             'progress': self.progress(),
             'is_active': self.is_active(),
-            'file_position': self.file_position,
+            'file_position': self.file_position if self.file_position is not None else 0,
             'file_size': self.file_size,
         }
     def file_path(self):
-        if self.current_file:
-            return self.current_file.name
+        if self.current_file_reader:
+            return str(self.current_file_reader.gcode_file)
         return None
     def progress(self):
-        if self.file_size:
+        if self.file_size and self.file_position:
             return float(self.file_position) / self.file_size
         else:
             return 0.
@@ -128,23 +132,23 @@ class VirtualSD:
         self.printer.send_event("virtual_sdcard:resume")
         self.printer.in_cancelling_state = False
     def do_cancel(self):
-        if self.current_file is not None:
+        if self.current_file_reader is not None:
             self.do_pause()
-            self.current_file.close()
-            self.current_file = None
+            self.current_file_reader = None
             self.print_stats.note_cancel()
             self.printer.send_event("virtual_sdcard:cancel")
             self.printer.in_cancelling_state = False
-        self.file_position = self.file_size = 0
+        self.file_position = None
+        self.file_size = 0
     # G-Code commands
     def cmd_error(self, gcmd):
         raise gcmd.error("SD write not supported")
     def _reset_file(self):
-        if self.current_file is not None:
+        if self.current_file_reader is not None:
             self.do_pause()
-            self.current_file.close()
-            self.current_file = None
-        self.file_position = self.file_size = 0
+            self.current_file_reader = None
+        self.file_position = None
+        self.file_size = 0
         self.print_stats.reset()
         self.printer.send_event("virtual_sdcard:reset_file")
     cmd_SDCARD_RESET_FILE_help = "Clears a loaded SD File. Stops the print "\
@@ -193,18 +197,15 @@ class VirtualSD:
             if fname not in flist:
                 fname = files_by_lower[fname.lower()]
             fname = os.path.join(self.sdcard_dirname, fname)
-            f = io.open(fname, 'r', newline='')
-            f.seek(0, os.SEEK_END)
-            fsize = f.tell()
-            f.seek(0)
+            f = honeybee_gcode_reader.Reader(Path(fname))
         except:
             logging.exception("virtual_sdcard file open")
             raise gcmd.error("Unable to open file")
-        gcmd.respond_raw("File opened:%s Size:%d" % (filename, fsize))
+        gcmd.respond_raw("File opened:%s Size:%d" % (filename, 1))  #TODO
         gcmd.respond_raw("File selected")
-        self.current_file = f
-        self.file_position = 0
-        self.file_size = fsize
+        self.current_file_reader = f
+        self.file_position = None
+        self.file_size = 1  #TODO
         self.print_stats.set_current_file(filename)
     def cmd_M24(self, gcmd):
         # Start/resume SD print
@@ -236,7 +237,7 @@ class VirtualSD:
         logging.info("Starting SD card print (position %d)", self.file_position)
         self.reactor.unregister_timer(self.work_timer)
         try:
-            self.current_file.seek(self.file_position)
+            self.current_file_reader.set_pos(self.file_position)
         except:
             logging.exception("virtual_sdcard seek")
             self.work_timer = None
@@ -249,29 +250,24 @@ class VirtualSD:
             self.cmd_from_sd = True
             self.must_pause_work = True
             pause_resume.do_pause("interlock")
-        partial_input = ""
         lines = []
         error_message = None
         while not self.must_pause_work:
             if not lines:
                 # Read more data
                 try:
-                    data = self.current_file.read(8192)
+                    lines, eof = self.current_file_reader.read_chunk(100)
+                    lines.reverse()
                 except:
                     logging.exception("virtual_sdcard read")
                     break
-                if not data:
+                if eof and len(lines) == 0:
                     # End of file
-                    self.current_file.close()
-                    self.current_file = None
+                    self.current_file_reader = None
                     logging.info("Finished SD card print")
                     self.gcode.respond_raw("Done printing file")
                     self.printer.send_event("virtual_sdcard:finished")
                     break
-                lines = data.split('\n')
-                lines[0] = partial_input + lines[0]
-                partial_input = lines.pop()
-                lines.reverse()
                 self.reactor.pause(self.reactor.NOW)
                 continue
             # Pause if any other request is pending in the gcode class
@@ -281,10 +277,9 @@ class VirtualSD:
             # Dispatch command
             self.cmd_from_sd = True
             line = lines.pop()
-            next_file_position = self.file_position + len(line.encode()) + 1
-            self.next_file_position = next_file_position
+            self.next_file_position = line[0]
             try:
-                self.gcode.run_script(line)
+                self.gcode.run_script(line[1])
             except self.gcode.error as e:
                 error_message = str(e)
                 try:
@@ -299,7 +294,7 @@ class VirtualSD:
 
             gcode_need_repeat = False
             if self.printer.in_cancelling_state:
-                line_stripped_upper = line.strip().upper()
+                line_stripped_upper = line[1].strip().upper()
                 for cmd in RERUN_NEED_COMMANDS:
                     if line_stripped_upper.startswith(cmd):
                         gcode_need_repeat = True
@@ -309,22 +304,13 @@ class VirtualSD:
                 logging.info(f"Line {line} does NOT need to be repeated")
                 self.file_position = self.next_file_position
             # Do we need to skip around?
-            if self.next_file_position != next_file_position:
-                try:
-                    self.current_file.seek(self.file_position)
-                except:
-                    logging.exception("virtual_sdcard seek")
-                    self.work_timer = None
-                    return self.reactor.NEVER
-                lines = []
-                partial_input = ""
         logging.info("Exiting SD card print (position %d)", self.file_position)
         self.printer.in_cancelling_state = False
         self.work_timer = None
         self.cmd_from_sd = False
         if error_message is not None:
             self.print_stats.note_error(error_message)
-        elif self.current_file is not None:
+        elif self.current_file_reader is not None:
             self.print_stats.note_pause()
         else:
             self.print_stats.note_complete()
