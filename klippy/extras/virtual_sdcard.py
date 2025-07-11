@@ -7,7 +7,7 @@ import os, logging, io
 from pathlib import Path
 import honeybee_gcode_reader
 
-VALID_GCODE_EXTS = ['gcode', 'g', 'gco']
+VALID_GCODE_EXTS = ['gcode', 'g', 'gco','bgcode']
 
 RERUN_NEED_COMMANDS = [
     "TEMPERATURE_WAIT",
