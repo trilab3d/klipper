@@ -197,15 +197,16 @@ class VirtualSD:
             if fname not in flist:
                 fname = files_by_lower[fname.lower()]
             fname = os.path.join(self.sdcard_dirname, fname)
-            f = honeybee_gcode_reader.Reader(Path(fname))
-        except:
-            logging.exception("virtual_sdcard file open")
+            fpath = Path(fname)
+            f = honeybee_gcode_reader.Reader(fpath)
+        except Exception as e:
+            logging.exception(e)
             raise gcmd.error("Unable to open file")
         gcmd.respond_raw("File opened:%s Size:%d" % (filename, 1))  #TODO
         gcmd.respond_raw("File selected")
         self.current_file_reader = f
         self.file_position = None
-        self.file_size = 1  #TODO
+        self.file_size = fpath.stat().st_size
         self.print_stats.set_current_file(filename)
     def cmd_M24(self, gcmd):
         # Start/resume SD print
@@ -256,7 +257,7 @@ class VirtualSD:
             if not lines:
                 # Read more data
                 try:
-                    lines, eof = self.current_file_reader.read_chunk(100)
+                    lines, eof = self.current_file_reader.read_chunk(1000, timeout=200)
                     lines.reverse()
                 except:
                     logging.exception("virtual_sdcard read")
