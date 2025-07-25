@@ -24,7 +24,7 @@ class QueueHandler(logging.Handler):
 class QueueListener(logging.handlers.RotatingFileHandler):
     def __init__(self, filename):
         logging.handlers.RotatingFileHandler.__init__(
-            self, filename, maxBytes=104_857_60, backupCount=2)  # max 100MB
+            self, filename, maxBytes=10_485_760, backupCount=10)  # max 100MB
         self.bg_queue = queue.Queue()
         self.bg_thread = threading.Thread(target=self._bg_thread)
         self.bg_thread.start()

@@ -6,6 +6,7 @@
 import os, logging, io
 from pathlib import Path
 import honeybee_gcode_reader
+import time
 
 VALID_GCODE_EXTS = ['gcode', 'g', 'gco','bgcode']
 
@@ -257,7 +258,9 @@ class VirtualSD:
             if not lines:
                 # Read more data
                 try:
+                    start_time = time.time()
                     lines, eof = self.current_file_reader.read_chunk(1000, timeout=200)
+                    logging.info(f"Line buffer empty. Readed {len(lines)} lines in {time.time()-start_time}s. End of file: {eof}")
                     lines.reverse()
                 except:
                     logging.exception("virtual_sdcard read")
