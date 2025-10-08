@@ -21,7 +21,8 @@ SOURCE_FILES = [
     'itersolve.c', 'trapq.c', 'pollreactor.c', 'msgblock.c', 'trdispatch.c',
     'kin_cartesian.c', 'kin_corexy.c', 'kin_corexz.c', 'kin_delta.c',
     'kin_deltesian.c', 'kin_polar.c', 'kin_rotary_delta.c', 'kin_winch.c',
-    'kin_extruder.c', 'kin_shaper.c', 'kin_idex.c', 'kin_generic.c'
+    'kin_extruder.c', 'kin_shaper.c', 'kin_idex.c', 'kin_generic.c',
+    'kin_cartesian_xe.c'
 ]
 DEST_LIB = "c_helper.so"
 OTHER_FILES = [
@@ -162,6 +163,12 @@ defs_kin_extruder = """
         , double print_time, double pressure_advance, double smooth_time);
 """
 
+defs_kin_cartesian_xe = """
+    struct stepper_kinematics *cartesian_xe_stepper_alloc(char base_axis);
+    void cartesian_xe_set_extruder_sk(struct stepper_kinematics *sk
+        , struct stepper_kinematics *extruder_sk, double rotation_ratio);
+"""
+
 defs_kin_shaper = """
     int input_shaper_set_shaper_params(struct stepper_kinematics *sk, char axis
         , int n, double a[], double t[]);
@@ -239,7 +246,7 @@ defs_all = [
     defs_kin_cartesian, defs_kin_corexy, defs_kin_corexz, defs_kin_delta,
     defs_kin_deltesian, defs_kin_polar, defs_kin_rotary_delta, defs_kin_winch,
     defs_kin_extruder, defs_kin_shaper, defs_kin_idex,
-    defs_kin_generic_cartesian,
+    defs_kin_generic_cartesian, defs_kin_cartesian_xe,
 ]
 
 # Update filenames to an absolute path
