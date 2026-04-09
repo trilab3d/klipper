@@ -70,8 +70,10 @@ class SensorGroup:
                 for i, s in enumerate(self.temps_valid):
                     self.temps_valid[i] = False
                 agg = aggregation_methods[self.agregation_mode](self.temps, self.last_valid_temps)
+                max_tmp = aggregation_methods[AggregationMode.MAX](self.temps, self.last_valid_temps)
                 self.last_temp = agg
-                if self.max_absolute_deviation is not None:
+                # Only check panels deviation, when they are in region, where they can measurre accuratelly
+                if self.max_absolute_deviation is not None and max_tmp >= 30:
                     for i, t in enumerate(self.temps):
                         if abs(t-agg) > self.max_absolute_deviation:
                             self.printer.invoke_shutdown(f"Sensor group {self.name} sensor {i} deviated so much "
